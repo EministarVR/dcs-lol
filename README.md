@@ -58,7 +58,7 @@ npm run dev
 ## 🧾 Beispiel-Link
 ```
 Original: https://discord.gg/kcGCDRB2x6
-Kurz:     https://dcs.lol/bestecommunity
+Kurz:     https://dcs.lol/dcs
 ```
 ---
 # 🧑‍💻 Maintainer
