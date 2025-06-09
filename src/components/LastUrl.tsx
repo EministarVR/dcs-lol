@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ExternalLink, Copy, Clock, TrendingUp } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -10,59 +10,22 @@ interface RecentLink {
   createdAt: string;
 }
 
-const mockRecentLinks: RecentLink[] = [
-  {
-    id: '1',
-    originalUrl: 'discord.gg/gaming-community-xyz123',
-    shortUrl: 'dcs.lol/game42',
-    clicks: 1247,
-    createdAt: '2 Min'
-  },
-  {
-    id: '2',
-    originalUrl: 'discord.com/invite/developers-hub-abc',
-    shortUrl: 'dcs.lol/dev88',
-    clicks: 892,
-    createdAt: '5 Min'
-  },
-  {
-    id: '3',
-    originalUrl: 'discord.gg/music-lovers-def456',
-    shortUrl: 'dcs.lol/music7',
-    clicks: 634,
-    createdAt: '8 Min'
-  },
-  {
-    id: '4',
-    originalUrl: 'discord.com/invite/art-community-ghi',
-    shortUrl: 'dcs.lol/art99',
-    clicks: 445,
-    createdAt: '12 Min'
-  },
-  {
-    id: '5',
-    originalUrl: 'discord.gg/tech-talk-jkl789',
-    shortUrl: 'dcs.lol/tech3',
-    clicks: 321,
-    createdAt: '15 Min'
-  },
-  {
-    id: '6',
-    originalUrl: 'discord.com/invite/anime-fans-mno',
-    shortUrl: 'dcs.lol/anime1',
-    clicks: 198,
-    createdAt: '18 Min'
-  }
-];
-
 export const LastUrl: React.FC = () => {
   const { t } = useLanguage();
+  const [recentLinks, setRecentLinks] = useState<RecentLink[]>([]);
+
+  useEffect(() => {
+    fetch('https://dcs.lol/api/recents')
+      .then(res => res.json())
+      .then(setRecentLinks)
+      .catch(err => console.error('Fehler beim Laden der Links:', err));
+  }, []);
 
   const copyToClipboard = async (url: string) => {
     try {
-      await navigator.clipboard.writeText(`https://${url}`);
+      await navigator.clipboard.writeText(url.startsWith('http') ? url : `https://${url}`);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      console.error('Copy-Fehler:', err);
     }
   };
 
@@ -71,7 +34,10 @@ export const LastUrl: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-5xl md:text-6xl font-black mb-6">
-            {t('recentTitle')} <span className="bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">{t('recentSubtitle')}</span>
+            {t('recentTitle')}{' '}
+            <span className="bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+              {t('recentSubtitle')}
+            </span>
           </h2>
           <p className="text-xl md:text-2xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
             {t('recentDescription')}
@@ -79,7 +45,7 @@ export const LastUrl: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {mockRecentLinks.map((link, index) => (
+          {recentLinks.map((link, index) => (
             <div
               key={link.id}
               className="group bg-gray-800/40 backdrop-blur-xl rounded-2xl p-6 border border-gray-700/50 hover:border-green-500/50 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-green-500/10"
@@ -91,7 +57,7 @@ export const LastUrl: React.FC = () => {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-2 text-gray-400">
                   <Clock className="w-4 h-4" />
-                  <span className="text-sm">vor {link.createdAt}</span>
+                  <span className="text-sm">{link.createdAt}</span>
                 </div>
                 <div className="flex items-center space-x-2 text-green-400">
                   <TrendingUp className="w-4 h-4" />
@@ -119,9 +85,14 @@ export const LastUrl: React.FC = () => {
                     >
                       <Copy className="w-4 h-4" />
                     </button>
-                    <button className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition-all duration-200 group-hover:scale-110">
+                    <a
+                      href={link.shortUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30 transition-all duration-200 group-hover:scale-110"
+                    >
                       <ExternalLink className="w-4 h-4" />
-                    </button>
+                    </a>
                   </div>
                 </div>
               </div>
