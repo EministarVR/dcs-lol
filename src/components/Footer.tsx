@@ -21,7 +21,7 @@ export const Footer: React.FC = () => {
               Einfach, schnell und kostenlos für alle Communities.
             </p>
             <div className="flex space-x-4">
-              <a href="https://github.com/EministarVR" className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-purple-600 transition-all duration-300 hover:scale-110">
+              <a href="https://github.com/EministarVR/dcs-lol" className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-purple-600 transition-all duration-300 hover:scale-110">
                 <Github className="w-6 h-6 text-gray-300 hover:text-white" />
               </a>
               <a href="mailto:benounnaelemin@gmail.com" className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center hover:bg-purple-600 transition-all duration-300 hover:scale-110">
@@ -42,6 +42,16 @@ export const Footer: React.FC = () => {
               <li>
                 <a href="#about" className="text-gray-400 hover:text-purple-400 transition-colors duration-200 text-lg">
                   Über uns
+                </a>
+              </li>
+              <li>
+                <a href="https://dcs.instatus.com" className="text-gray-400 hover:text-purple-400 transition-colors duration-200 text-lg">
+                  Status
+                </a>
+              </li>
+              <li>
+                <a href="https://ko-fi.com/eministarvr" className="text-gray-400 hover:text-purple-400 transition-colors duration-200 text-lg">
+                  Spenden
                 </a>
               </li>
             </ul>
