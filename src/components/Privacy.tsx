@@ -47,9 +47,9 @@ export const Privacy: React.FC<PrivacyProps> = ({ isOpen, onClose }) => {
       ],
       contactText: 'Bei Fragen oder Anliegen zum Datenschutz kannst du uns jederzeit kontaktieren:',
       contactInfo: [
-        '📧 E-Mail: privacy@dcs.lol',
-        '💬 Discord: dcs.lol/support',
-        '📍 Adresse: Musterstraße 123, 12345 Berlin, Deutschland'
+        '📧 E-Mail: info@dcs.lol',
+        '💬 Discord: dcs.lol/dcs',
+      
       ]
     },
     en: {
@@ -86,9 +86,9 @@ export const Privacy: React.FC<PrivacyProps> = ({ isOpen, onClose }) => {
       ],
       contactText: 'For questions or concerns about privacy, you can contact us at any time:',
       contactInfo: [
-        '📧 Email: privacy@dcs.lol',
-        '💬 Discord: dcs.lol/support',
-        '📍 Address: Musterstraße 123, 12345 Berlin, Germany'
+        '📧 Email: info@dcs.lol',
+        '💬 Discord: dcs.lol/dcs',
+        
       ]
     }
   };
