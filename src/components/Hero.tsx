@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Copy, ExternalLink, CheckCircle, AlertCircle, Zap } from 'lucide-react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export const Hero: React.FC = () => {
+  const { t } = useLanguage();
   const [inputUrl, setInputUrl] = useState('');
   const [customId, setCustomId] = useState('');
   const [shortenedUrl, setShortenedUrl] = useState('');
@@ -20,17 +22,17 @@ export const Hero: React.FC = () => {
 
   const shortenUrl = async () => {
     if (!inputUrl.trim()) {
-      setError('Bitte gib eine Discord Invite URL ein');
+      setError(t('enterUrl'));
       return;
     }
 
     if (!validateDiscordUrl(inputUrl)) {
-      setError('Bitte gib eine gültige Discord Invite URL ein (discord.gg/... oder discord.com/invite/...)');
+      setError(t('invalidUrl'));
       return;
     }
 
     if (!customId.trim()) {
-      setError('Bitte gib einen Wunsch-Link ein');
+      setError(t('enterCustom'));
       return;
     }
 
@@ -39,13 +41,10 @@ export const Hero: React.FC = () => {
 
     try {
       const res = await fetch('/api/shorten', {
-
-
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ originalUrl: inputUrl, customId: customId }),
-});
-
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ originalUrl: inputUrl, customId: customId }),
+      });
 
       const data = await res.json();
 
@@ -84,21 +83,21 @@ export const Hero: React.FC = () => {
           <div className="flex justify-center mb-8">
             <div className="inline-flex items-center space-x-2 bg-gray-800/50 backdrop-blur-xl border border-gray-700 rounded-full px-6 py-3">
               <Zap className="w-5 h-5 text-yellow-400" />
-              <span className="text-gray-300 font-medium">Blitzschnell & Kostenlos</span>
+              <span className="text-gray-300 font-medium">{t('fastFree')}</span>
             </div>
           </div>
 
           <h1 className="text-6xl md:text-8xl font-black mb-8 leading-tight">
             <span className="bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              Discord Links
+              {t('heroTitle')}
             </span>
             <br />
-            <span className="text-white">verkürzen</span>
+            <span className="text-white">{t('heroSubtitle')}</span>
           </h1>
 
           <p className="text-xl md:text-2xl text-gray-300 mb-16 max-w-4xl mx-auto leading-relaxed">
-            Verwandle deine langen Discord Server Einladungen in kurze, elegante Links.{' '}
-            <span className="text-purple-400 font-semibold"> Einfach. Schnell. Kostenlos.</span>
+            {t('heroDescription')}{' '}
+            <span className="text-purple-400 font-semibold"> {t('heroHighlight')}</span>
           </p>
 
           <div className="max-w-3xl mx-auto mb-20">
@@ -108,14 +107,14 @@ export const Hero: React.FC = () => {
                   type="text"
                   value={inputUrl}
                   onChange={(e) => setInputUrl(e.target.value)}
-                  placeholder="Discord Invite Link hier einfügen..."
+                  placeholder={t('discordPlaceholder')}
                   className="w-full px-8 py-6 text-xl bg-gray-900/50 border-2 border-gray-600 rounded-2xl focus:border-purple-500 focus:outline-none transition-all duration-300 text-white placeholder-gray-400 backdrop-blur-sm"
                 />
                 <input
                   type="text"
                   value={customId}
                   onChange={(e) => setCustomId(e.target.value)}
-                  placeholder="Wunsch-Link (z. B. meinserver)"
+                  placeholder={t('customPlaceholder')}
                   className="w-full px-8 py-6 text-xl bg-gray-900/50 border-2 border-gray-600 rounded-2xl focus:border-blue-500 focus:outline-none transition-all duration-300 text-white placeholder-gray-400 backdrop-blur-sm"
                 />
 
@@ -134,12 +133,12 @@ export const Hero: React.FC = () => {
                   {isLoading ? (
                     <div className="flex items-center justify-center space-x-3">
                       <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin"></div>
-                      <span>Link wird erstellt...</span>
+                      <span>{t('creating')}</span>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center space-x-3">
                       <Zap className="w-6 h-6" />
-                      <span>Link verkürzen</span>
+                      <span>{t('shortenButton')}</span>
                     </div>
                   )}
                 </button>
@@ -149,7 +148,7 @@ export const Hero: React.FC = () => {
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center space-x-3">
                         <CheckCircle className="w-6 h-6 text-green-400" />
-                        <span className="text-green-300 font-bold text-lg">Dein verkürzter Link:</span>
+                        <span className="text-green-300 font-bold text-lg">{t('yourLink')}</span>
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
@@ -180,15 +179,15 @@ export const Hero: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             <div className="text-center p-8 bg-gray-800/30 backdrop-blur-xl rounded-2xl border border-gray-700/50 hover:border-purple-500/50 transition-all duration-300 group">
               <div className="text-4xl font-black text-purple-400 mb-3 group-hover:scale-110 transition-transform duration-300">100+</div>
-              <div className="text-gray-300 text-lg">Links verkürzt</div>
+              <div className="text-gray-300 text-lg">{t('linksShortened')}</div>
             </div>
             <div className="text-center p-8 bg-gray-800/30 backdrop-blur-xl rounded-2xl border border-gray-700/50 hover:border-blue-500/50 transition-all duration-300 group">
               <div className="text-4xl font-black text-blue-400 mb-3 group-hover:scale-110 transition-transform duration-300">99.9%</div>
-              <div className="text-gray-300 text-lg">Verfügbarkeit</div>
+              <div className="text-gray-300 text-lg">{t('uptime')}</div>
             </div>
             <div className="text-center p-8 bg-gray-800/30 backdrop-blur-xl rounded-2xl border border-gray-700/50 hover:border-cyan-500/50 transition-all duration-300 group">
               <div className="text-4xl font-black text-cyan-400 mb-3 group-hover:scale-110 transition-transform duration-300">∞</div>
-              <div className="text-gray-300 text-lg">Kostenlos</div>
+              <div className="text-gray-300 text-lg">{t('free')}</div>
             </div>
           </div>
         </div>

@@ -1,7 +1,11 @@
 import React from 'react';
 import { Link } from 'lucide-react';
+import { LanguageSwitcher } from './LanguageSwitcher';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export const Header: React.FC = () => {
+  const { t } = useLanguage();
+
   return (
     <header className="relative z-50 w-full bg-gray-900/90 backdrop-blur-xl border-b border-gray-800">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -17,23 +21,27 @@ export const Header: React.FC = () => {
           
           <nav className="hidden md:flex items-center space-x-8">
             <a href="#features" className="text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium">
-              Features
+              {t('features')}
             </a>
             <a href="#about" className="text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium">
-              About
+              {t('about')}
             </a>
+            <LanguageSwitcher />
             <button className="bg-gradient-to-r from-purple-500 to-blue-600 text-white px-6 py-2 rounded-full hover:from-purple-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5">
-              Get Started
+              {t('getStarted')}
             </button>
           </nav>
           
-          <button className="md:hidden p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors duration-200">
-            <div className="w-6 h-6 flex flex-col justify-center items-center">
-              <span className="w-4 h-0.5 bg-gray-300 mb-1"></span>
-              <span className="w-4 h-0.5 bg-gray-300 mb-1"></span>
-              <span className="w-4 h-0.5 bg-gray-300"></span>
-            </div>
-          </button>
+          <div className="md:hidden flex items-center space-x-4">
+            <LanguageSwitcher />
+            <button className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors duration-200">
+              <div className="w-6 h-6 flex flex-col justify-center items-center">
+                <span className="w-4 h-0.5 bg-gray-300 mb-1"></span>
+                <span className="w-4 h-0.5 bg-gray-300 mb-1"></span>
+                <span className="w-4 h-0.5 bg-gray-300"></span>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     </header>

@@ -17,6 +17,17 @@
   }
 }
 
+@keyframes slideInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-blob {
   animation: blob 7s infinite;
 }
@@ -94,4 +105,12 @@ input:focus {
 
 .shadow-blue-500\/25 {
   box-shadow: 0 25px 50px -12px rgba(59, 130, 246, 0.25);
+}
+
+.shadow-green-500\/25 {
+  box-shadow: 0 25px 50px -12px rgba(34, 197, 94, 0.25);
+}
+
+.shadow-green-500\/10 {
+  box-shadow: 0 25px 50px -12px rgba(34, 197, 94, 0.1);
 }
