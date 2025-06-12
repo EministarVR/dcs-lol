@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Link, Github, Mail, Heart } from 'lucide-react';
 import { Privacy } from './Privacy';
+import { Terms } from './TOS';
 import { useLanguage } from '../contexts/LanguageContext';
 
 export const Footer: React.FC = () => {
   const { t } = useLanguage();
   const [showPrivacy, setShowPrivacy] = useState(false);
-
+  const [showTerms, setShowTerms] = useState(false);
   return (
     <>
       <footer className="bg-black border-t border-gray-800">
@@ -94,6 +95,14 @@ export const Footer: React.FC = () => {
                     {t('privacy')}
                   </button>
                 </li>
+                <li>
+                <button 
+                  onClick={() => setShowTerms(true)}
+                  className="text-gray-400 hover:text-purple-400 transition-colors duration-200 text-lg"
+                >
+                  {t('termsTitle')}
+                </button>
+              </li>
               </ul>
             </div>
           </div>
@@ -112,6 +121,7 @@ export const Footer: React.FC = () => {
       </footer>
 
       <Privacy isOpen={showPrivacy} onClose={() => setShowPrivacy(false)} />
+      <Terms isOpen={showTerms} onClose={() => setShowTerms(false)} />
     </>
   );
 };

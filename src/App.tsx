@@ -5,6 +5,7 @@ import { Features } from './components/Features';
 import { Stats } from './components/Stats';
 import { Analytics } from './components/Analytics';
 import { Testimonials } from './components/Testimonials';
+import { Showcase } from './components/Showcase';
 import { LastUrl } from './components/LastUrl';
 import { FAQ } from './components/FAQ';
 import { CTA } from './components/CTA';
@@ -19,6 +20,7 @@ function App() {
       <Stats />
       <Analytics />
       <Testimonials />
+      <Showcase />
       <LastUrl />
       <FAQ />
       <CTA />
