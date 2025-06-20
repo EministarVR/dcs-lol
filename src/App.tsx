@@ -1,4 +1,5 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { Features } from './components/Features';
@@ -10,8 +11,9 @@ import { LastUrl } from './components/LastUrl';
 import { FAQ } from './components/FAQ';
 import { CTA } from './components/CTA';
 import { Footer } from './components/Footer';
+import { Redirect } from './pages/Redirect';
 
-function App() {
+function HomePage() {
   return (
     <div className="min-h-screen bg-black">
       <Header />
@@ -26,6 +28,18 @@ function App() {
       <CTA />
       <Footer />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/redirect" element={<Redirect />} />
+        <Route path="/:shortCode" element={<Redirect />} />
+      </Routes>
+    </Router>
   );
 }
 
