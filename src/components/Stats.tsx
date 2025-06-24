@@ -106,11 +106,11 @@ export const Stats: React.FC = () => {
   useEffect(() => {
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
+        if (entry.isIntersecting && !isVisible) {
           setIsVisible(true);
         }
       },
-      { threshold: 0.3 }
+      { threshold: 0.1, rootMargin: '50px' }
     );
 
     const element = document.getElementById('stats-section');
@@ -119,10 +119,10 @@ export const Stats: React.FC = () => {
     }
 
     return () => observer.disconnect();
-  }, []);
+  }, [isVisible]);
 
   return (
-    <section id="stats-section" className="py-24 bg-gradient-to-b from-black to-gray-900 relative overflow-hidden">
+    <section id="stats-section" className="py-16 sm:py-24 bg-gradient-to-b from-black to-gray-900 relative overflow-hidden">
       {/* Background Effects */}
       <div className="absolute inset-0">
         <div className="absolute top-20 left-10 w-96 h-96 bg-purple-600/10 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-blob"></div>
@@ -130,30 +130,30 @@ export const Stats: React.FC = () => {
       </div>
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-20">
-          <h2 className="text-5xl md:text-6xl font-black mb-6">
+        <div className="text-center mb-16 sm:mb-20">
+          <h2 className="text-4xl sm:text-5xl md:text-6xl font-black mb-6">
             {t('statsTitle')} <span className="bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">{t('statsSubtitle')}</span>
           </h2>
-          <p className="text-xl md:text-2xl text-gray-300 max-w-4xl mx-auto leading-relaxed">
+          <p className="text-lg sm:text-xl md:text-2xl text-gray-300 max-w-4xl mx-auto leading-relaxed px-4">
             {t('statsDescription')} <span className="text-cyan-400 font-bold">{t('statsHighlight')}</span> {t('statsDescEnd')}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
           {statsData.map((stat, index) => (
             <div
               key={index}
-              className="group bg-gray-800/40 backdrop-blur-xl rounded-2xl p-8 border border-gray-700/50 hover:border-cyan-500/50 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-cyan-500/10 text-center"
+              className="group bg-gray-800/40 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-gray-700/50 hover:border-cyan-500/50 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:shadow-cyan-500/10 text-center"
               style={{
                 animationDelay: `${index * 150}ms`,
                 animation: 'slideInUp 0.8s ease-out forwards'
               }}
             >
-              <div className={`w-16 h-16 bg-gradient-to-r ${stat.color} rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
-                <stat.icon className="w-8 h-8 text-white" />
+              <div className={`w-12 sm:w-16 h-12 sm:h-16 bg-gradient-to-r ${stat.color} rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
+                <stat.icon className="w-6 sm:w-8 h-6 sm:h-8 text-white" />
               </div>
               
-              <div className="text-4xl md:text-5xl font-black text-white mb-3">
+              <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-3 tabular-nums">
                 {isVisible ? (
                   <CountUp 
                     end={parseFloat(stat.value)} 
@@ -165,7 +165,7 @@ export const Stats: React.FC = () => {
                 )}
               </div>
               
-              <p className="text-gray-300 text-lg font-medium">
+              <p className="text-gray-300 text-base sm:text-lg font-medium">
                 {stat.label}
               </p>
             </div>
@@ -173,23 +173,23 @@ export const Stats: React.FC = () => {
         </div>
 
         {/* Achievement Badges */}
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="mt-16 sm:mt-20 grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
           <div className="text-center p-6 bg-gradient-to-r from-yellow-900/20 to-orange-900/20 rounded-2xl border border-yellow-500/30">
-            <Award className="w-12 h-12 text-yellow-400 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">{t('topShortener')}</h3>
-            <p className="text-gray-300">{t('topShortenerDesc')}</p>
+            <Award className="w-10 sm:w-12 h-10 sm:h-12 text-yellow-400 mx-auto mb-4" />
+            <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{t('topShortener')}</h3>
+            <p className="text-gray-300 text-sm sm:text-base">{t('topShortenerDesc')}</p>
           </div>
           
           <div className="text-center p-6 bg-gradient-to-r from-green-900/20 to-emerald-900/20 rounded-2xl border border-green-500/30">
-            <Zap className="w-12 h-12 text-green-400 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">{t('lightningFast')}</h3>
-            <p className="text-gray-300">{t('lightningFastDesc')}</p>
+            <Zap className="w-10 sm:w-12 h-10 sm:h-12 text-green-400 mx-auto mb-4" />
+            <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{t('lightningFast')}</h3>
+            <p className="text-gray-300 text-sm sm:text-base">{t('lightningFastDesc')}</p>
           </div>
           
           <div className="text-center p-6 bg-gradient-to-r from-blue-900/20 to-purple-900/20 rounded-2xl border border-blue-500/30">
-            <Globe className="w-12 h-12 text-blue-400 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">{t('globallyAvailable')}</h3>
-            <p className="text-gray-300">{t('globallyAvailableDesc')}</p>
+            <Globe className="w-10 sm:w-12 h-10 sm:h-12 text-blue-400 mx-auto mb-4" />
+            <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{t('globallyAvailable')}</h3>
+            <p className="text-gray-300 text-sm sm:text-base">{t('globallyAvailableDesc')}</p>
           </div>
         </div>
       </div>

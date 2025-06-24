@@ -47,12 +47,21 @@
   body {
     @apply bg-black text-white;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Prevent horizontal scrolling */
+    overflow-x: hidden;
   }
-}
-
-/* Smooth scrolling */
-html {
-  scroll-behavior: smooth;
+  
+  html {
+    /* Prevent horizontal scrolling */
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+  }
+  
+  /* Prevent horizontal overflow on all elements */
+  * {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
 }
 
 /* Custom scrollbar */
@@ -113,4 +122,54 @@ input:focus {
 
 .shadow-green-500\/10 {
   box-shadow: 0 25px 50px -12px rgba(34, 197, 94, 0.1);
+}
+
+/* Prevent text overflow */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Responsive container */
+.container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container {
+    max-width: 640px;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1024px;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container {
+    max-width: 1280px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .container {
+    max-width: 1536px;
+  }
 }
