@@ -7,7 +7,7 @@ nixPkgs = ["nodejs_20"]
 [phases.install]
 # Install deps including devDependencies needed for Vite build
 cmds = [
-  "npm ci --include=dev"
+  "npm install --include=dev"
 ]
 
 [phases.build]
@@ -17,4 +17,5 @@ cmds = [
 ]
 
 [start]
-cmd = "npm run start:multi"
+# Single process: main Express app serves API + uploads + static dist
+cmd = "node backend/index.cjs"

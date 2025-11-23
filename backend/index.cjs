@@ -3,8 +3,12 @@ const fs = require("fs");
 const path = require("path");
 const cors = require("cors");
 const axios = require("axios");
+axios.defaults.timeout = 7000;
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
+const compression = require("compression");
+const morgan = require("morgan");
+const { router: showcaseRouter, UPLOADS_DIR } = require("./showcaseRouter.cjs");
 const app = express();
 const PORT = process.env.PORT || 49623;
 const DB_FILE = path.join(__dirname, "links.json");
@@ -17,15 +21,20 @@ if (!fs.existsSync(DB_FILE)) {
 
 let db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
 
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
+app.use(compression());
 app.use(cors());
-app.use(express.json());
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(express.json({ limit: "1mb" }));
 
 // Serve static files (prefer built assets from /dist in production)
 const DIST_DIR = path.join(__dirname, "..", "dist");
 const PUBLIC_DIR = fs.existsSync(DIST_DIR) ? DIST_DIR : path.join(__dirname, "..");
+app.use("/uploads", express.static(UPLOADS_DIR));
 app.use(express.static(PUBLIC_DIR));
 
 // Basic rate limit for all API routes
@@ -36,6 +45,7 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 app.use("/api", apiLimiter);
+app.use("/api", showcaseRouter);
 
 // Strengeres Rate-Limit für kritische Endpunkte
 const tightLimiter = rateLimit({
