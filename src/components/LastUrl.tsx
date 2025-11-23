@@ -59,8 +59,8 @@ export const LastUrl: React.FC = () => {
     );
   };
 
-  const visibleLinks = recentLinks.slice(currentIndex, currentIndex + itemsPerPage);
-  const showNavigation = recentLinks.length > itemsPerPage;
+  const visibleLinks = recentLinks.slice(0, 8);
+  const showNavigation = false;
 
   return (
     <section className="py-16 sm:py-24 bg-gradient-to-b from-gray-900 to-black overflow-hidden">

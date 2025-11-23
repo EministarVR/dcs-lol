@@ -107,6 +107,16 @@ app.post("/api/shorten", tightLimiter, (req, res) => {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
 
   const base = getBaseUrl(req);
+  // Fire webhook (non-blocking)
+  try {
+    sendWebhookEvent('link.created', {
+      id: customId,
+      originalUrl,
+      shortUrl: `${base}/${customId}`,
+      clicks: 0,
+      createdAt: newLink.createdAt,
+    });
+  } catch (e) {}
   res.json({ short: `${base}/${customId}` });
 });
 
@@ -151,10 +161,14 @@ app.get("/api/info/:id", async (req, res) => {
 });
 
 // Server-seitige Weiterleitung: 302 auf den Original-Discord-Link
-// Nur gültige Kurz-IDs abfangen
-app.get('/:id([A-Za-z0-9_-]{3,32})', (req, res) => {
+// Nur gültige Kurz-IDs abfangen; reservierte Pfade an SPA/Handler weitergeben
+app.get('/:id([A-Za-z0-9_-]{3,32})', (req, res, next) => {
+  const candidate = (req.params.id || '').toLowerCase();
+  const reserved = new Set(['api','health','uploads','assets','links','redirect','dashboard','favicon.ico','robots.txt','sitemap.xml']);
+  if (reserved.has(candidate)) return next();
+
   const link = db.find((l) => l.customId === req.params.id);
-  if (!link) return res.status(404).send('Not found');
+  if (!link) return next(); // SPA-Fallback greifen lassen
   // Klicks zählen (Best-Effort)
   try {
     link.clicks = (link.clicks || 0) + 1;
@@ -162,6 +176,19 @@ app.get('/:id([A-Za-z0-9_-]{3,32})', (req, res) => {
   } catch (e) {
     // ignore write error for redirect speed
   }
+  // Webhook (best-effort, async)
+  try {
+    const ip = (req.headers['x-forwarded-for']?.toString().split(',')[0].trim()) || req.ip;
+    const ua = req.get('user-agent') || '';
+    sendWebhookEvent('link.clicked', {
+      id: req.params.id,
+      clicks: link.clicks,
+      ip,
+      userAgent: ua,
+      at: new Date().toISOString(),
+    });
+  } catch (e) {}
+
   res.redirect(302, link.originalUrl);
 });
 
@@ -181,6 +208,31 @@ function loadWebhooks() {
 
 function saveWebhooks(webhooks) {
   fs.writeFileSync(WEBHOOK_PATH, JSON.stringify(webhooks, null, 2));
+}
+
+// Send webhooks (fire-and-forget) for events like link.created / link.clicked
+function sendWebhookEvent(type, payload) {
+  try {
+    const webhooks = loadWebhooks();
+    if (!Array.isArray(webhooks) || webhooks.length === 0) return;
+    const body = { type, timestamp: new Date().toISOString(), payload };
+    webhooks.forEach(async (hook) => {
+      try {
+        if (!hook || !hook.url) return;
+        await axios.post(hook.url, body, { headers: { 'Content-Type': 'application/json' } });
+        // Update counters best-effort
+        hook.totalCalls = (hook.totalCalls || 0) + 1;
+        hook.lastTriggered = new Date().toISOString();
+        saveWebhooks(webhooks);
+      } catch (e) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Webhook send failed:', e?.message || e);
+        }
+      }
+    });
+  } catch (e) {
+    // ignore
+  }
 }
 
 app.get("/api/webhooks", (req, res) => {
@@ -238,7 +290,7 @@ app.post("/api/webhooks/:id/test", tightLimiter, async (req, res) => {
 app.get("/api/recents", (req, res) => {
   const base = getBaseUrl(req);
   const recentLinks = db
-    .slice(-6)
+    .slice(-8)
     .reverse()
     .map((link) => ({
       id: link.customId,
