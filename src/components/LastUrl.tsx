@@ -17,7 +17,7 @@ export const LastUrl: React.FC = () => {
   const [itemsPerPage, setItemsPerPage] = useState(3);
 
   useEffect(() => {
-    fetch('https://dcs.lol/api/recents')
+    fetch('/api/recents')
       .then(res => res.json())
       .then(setRecentLinks)
       .catch(err => console.error('Fehler beim Laden der Links:', err));
@@ -189,9 +189,9 @@ export const LastUrl: React.FC = () => {
         )}
 
         <div className="text-center mt-12">
-          <button className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-2xl hover:shadow-green-500/25 transform hover:-translate-y-1">
+          <a href="/links" className="inline-block bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-2xl hover:shadow-green-500/25 transform hover:-translate-y-1">
             {t('showAll')}
-          </button>
+          </a>
         </div>
       </div>
     </section>
