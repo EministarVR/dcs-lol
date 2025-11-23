@@ -1,98 +1,83 @@
-// Showcase Router (CommonJS) — mounted under /api in backend/index.cjs
-// Provides:
-//   GET   /api/showcase        → list showcase entries
-//   POST  /api/showcase        → create entry with image upload
-// Exports: { router, UPLOADS_DIR }
-
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
-const rateLimit = require("express-rate-limit");
 const multer = require("multer");
 const sharp = require("sharp");
 const { v4: uuidv4 } = require("uuid");
-
-const router = express.Router();
+const rateLimit = require("express-rate-limit");
 
 // Paths
-const BACKEND_DIR = __dirname; // backend/
-const SHOWCASE_DB = path.join(BACKEND_DIR, "showcase.json");
-const UPLOADS_DIR = path.join(BACKEND_DIR, "uploads");
+const SHOWCASE_DB = path.join(__dirname, "showcase.json");
+const UPLOADS_DIR = path.join(__dirname, "uploads");
 
 // Ensure storage exists
-try {
-  if (!fs.existsSync(SHOWCASE_DB)) fs.writeFileSync(SHOWCASE_DB, "[]");
-  if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-} catch (e) {
-  console.error("[showcase] Init error:", e);
-}
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+if (!fs.existsSync(SHOWCASE_DB)) fs.writeFileSync(SHOWCASE_DB, "[]");
 
-// Tight rate limit specific to showcase endpoints
-const showcaseLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
-  max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-
-router.use(showcaseLimiter);
-
-// Multer (memory storage) for image upload
+// Multer (memory)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-  fileFilter(_req, file, cb) {
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (req, file, cb) => {
     const ok = ["image/png", "image/jpeg", "image/webp"].includes(file.mimetype);
     cb(null, ok);
   },
 });
 
-function loadDb() {
+// Per-route tighter rate limit
+const showcaseLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100, // a bit tighter than global
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const router = express.Router();
+router.use(showcaseLimiter);
+
+function loadShowcase() {
   try {
     return JSON.parse(fs.readFileSync(SHOWCASE_DB, "utf8"));
   } catch (e) {
-    console.error("[showcase] Read DB error:", e);
     return [];
   }
 }
 
-function saveDb(list) {
-  try {
-    fs.writeFileSync(SHOWCASE_DB, JSON.stringify(list, null, 2));
-  } catch (e) {
-    console.error("[showcase] Write DB error:", e);
-  }
+function saveShowcase(arr) {
+  fs.writeFileSync(SHOWCASE_DB, JSON.stringify(arr, null, 2));
 }
 
-// GET /api/showcase — list entries
-router.get("/showcase", (_req, res) => {
-  const data = loadDb();
-  res.json(data);
+// GET /api/showcase
+router.get("/showcase", (req, res) => {
+  try {
+    res.json(loadShowcase());
+  } catch (e) {
+    res.status(500).json({ error: "Fehler beim Laden des Showcase" });
+  }
 });
 
-// POST /api/showcase — create entry
+// POST /api/showcase
 router.post("/showcase", upload.single("logo"), async (req, res) => {
   try {
     const { name, description, inviteLink, category, tags } = req.body || {};
 
     const errors = {};
-    if (!name || !String(name).trim()) errors.name = "Name ist Pflicht";
-    if (!description || !String(description).trim()) errors.description = "Beschreibung ist Pflicht";
-
-    // Only allow dcs.lol/<id> format as requested
-    const invite = String(inviteLink || "").trim();
-    if (!invite || !/^dcs\.lol\/[A-Za-z0-9_-]{3,32}$/.test(invite)) {
-      errors.inviteLink = "Nur dcs.lol/<id> erlaubt";
+    if (!name || !name.trim()) errors.name = "Name ist Pflicht";
+    if (!description || !description.trim()) errors.description = "Beschreibung ist Pflicht";
+    if (!inviteLink || !/^dcs\.lol\/[A-Za-z0-9_-]{3,64}$/.test(inviteLink)) {
+      errors.inviteLink = "Nur dcs.lol/<id> Links erlaubt";
     }
-
-    if (!category) errors.category = "Kategorie ist Pflicht";
+    if (!category || !category.trim()) errors.category = "Kategorie ist Pflicht";
+    if (!req.file) errors.logo = "Logo ist Pflicht";
 
     let tagArray = [];
     if (tags) {
       try {
-        tagArray = Array.isArray(tags) ? tags : JSON.parse(tags);
+        const parsed = typeof tags === "string" ? JSON.parse(tags) : tags;
+        tagArray = Array.isArray(parsed) ? parsed : [];
       } catch {
-        tagArray = String(tags)
+        tagArray = tags
+          .toString()
           .split(",")
           .map((t) => t.trim())
           .filter(Boolean);
@@ -100,13 +85,8 @@ router.post("/showcase", upload.single("logo"), async (req, res) => {
     }
     if (tagArray.length > 5) errors.tags = "Maximal 5 Tags erlaubt";
 
-    if (!req.file) errors.logo = "Logo ist Pflicht";
+    if (Object.keys(errors).length) return res.status(400).json({ error: errors });
 
-    if (Object.keys(errors).length) {
-      return res.status(400).json({ error: errors });
-    }
-
-    // Process image → webp 512x512
     const id = uuidv4();
     const filename = `${id}.webp`;
     const outPath = path.join(UPLOADS_DIR, filename);
@@ -118,22 +98,22 @@ router.post("/showcase", upload.single("logo"), async (req, res) => {
 
     const entry = {
       id,
-      name: String(name).trim(),
-      description: String(description).trim(),
-      inviteLink: invite,
-      category,
+      name: name.trim(),
+      description: description.trim(),
+      inviteLink: inviteLink.trim(),
+      category: category.trim(),
       tags: tagArray,
       logoUrl: `/uploads/${filename}`,
       createdAt: new Date().toISOString(),
     };
 
-    const arr = loadDb();
-    arr.unshift(entry);
-    saveDb(arr);
+    const data = loadShowcase();
+    data.unshift(entry);
+    saveShowcase(data);
 
     res.status(201).json(entry);
   } catch (e) {
-    console.error("[showcase] POST error:", e);
+    console.error("Showcase upload error:", e);
     res.status(500).json({ error: "Server-Fehler beim Upload" });
   }
 });

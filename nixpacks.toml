@@ -1,5 +1,9 @@
 # Nixpacks configuration for building the Vite frontend and starting the Express backend
 
+[variables]
+PORT = "3000"
+NODE_ENV = "production"
+
 [phases.setup]
 # Ensure a modern Node is available during build/runtime
 nixPkgs = ["nodejs_20"]

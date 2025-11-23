@@ -304,6 +304,6 @@ function timeSince(date) {
   return `vor ${minutes} Min`;
 }
 
-app.listen(PORT, () => {
-  console.log(`Backend läuft auf http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend läuft auf http://0.0.0.0:${PORT}`);
 });
