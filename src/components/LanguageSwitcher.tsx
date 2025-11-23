@@ -11,6 +11,7 @@ export const LanguageSwitcher: React.FC = () => {
     { code: "en", name: "EN", flag: "🇺🇸" },
   ];
 
+
   const currentLanguage = languages.find((lang) => lang.code === language);
 
   const handleLanguageChange = (lang: string) => {
