@@ -9,7 +9,8 @@
     "server": "node backend/index.cjs",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start:multi": "concurrently \"node backend/index.cjs\" \"node backend/showcase.cjs\""
   },
   "dependencies": {
     "axios": "^1.10.0",

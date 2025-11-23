@@ -17,7 +17,4 @@ cmds = [
 ]
 
 [start]
-# Start the backend server; it will serve static files from /dist in production
-# PORT is provided by the platform; our server reads process.env.PORT
-cmd = "node backend/index.cjs"
-cmd = "node backend/showcase.cjs"
+cmd = "npm run start:multi"
