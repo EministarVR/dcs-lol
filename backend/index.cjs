@@ -8,18 +8,70 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const compression = require("compression");
 const morgan = require("morgan");
+const mysql = require("mysql2/promise");
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 const { router: showcaseRouter, UPLOADS_DIR } = require("./showcaseRouter.cjs");
 const app = express();
 const PORT = process.env.PORT || 49623;
-const DB_FILE = path.join(__dirname, "links.json");
 const WEBHOOK_PATH = path.join(__dirname, "webhooks.json");
 
-// Initialisiere Datenbank falls nicht vorhanden
-if (!fs.existsSync(DB_FILE)) {
-  fs.writeFileSync(DB_FILE, "[]");
+// MySQL Verbindungspool
+const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST || "127.0.0.1",
+  port: Number(process.env.MYSQL_PORT) || 3306,
+  user: process.env.MYSQL_USER || "root",
+  password: process.env.MYSQL_PASSWORD || "",
+  database: process.env.MYSQL_DATABASE || "dcs",
+  waitForConnections: true,
+  connectionLimit: Number(process.env.MYSQL_CONN_LIMIT) || 10,
+  queueLimit: 0,
+});
+
+const LEGACY_DB_FILE = path.join(__dirname, "links.json");
+
+async function ensureSchema() {
+  const createSql = `
+    CREATE TABLE IF NOT EXISTS links (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      custom_id VARCHAR(64) NOT NULL UNIQUE,
+      original_url VARCHAR(2048) NOT NULL,
+      clicks BIGINT NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  `;
+  await pool.query(createSql);
+
+  // Optional: Import aus alter JSON-Datei, falls Tabelle leer
+  try {
+    const [rows] = await pool.query("SELECT COUNT(*) AS cnt FROM links");
+    const count = rows && rows[0] ? rows[0].cnt : 0;
+    if (count === 0 && fs.existsSync(LEGACY_DB_FILE)) {
+      const json = JSON.parse(fs.readFileSync(LEGACY_DB_FILE, "utf8"));
+      if (Array.isArray(json) && json.length > 0) {
+        const values = json.map((l) => [
+          l.customId,
+          l.originalUrl,
+          Number(l.clicks || 0),
+          new Date(l.createdAt || Date.now()),
+        ]);
+        // Bulk insert
+        await pool.query(
+          "INSERT INTO links (custom_id, original_url, clicks, created_at) VALUES ?",
+          [values]
+        );
+        if (process.env.NODE_ENV !== "production") {
+          console.log(`Imported ${values.length} legacy links from JSON.`);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("Legacy import skipped:", e?.message || e);
+  }
 }
 
-let db = JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+ensureSchema().catch((e) => {
+  console.error("DB init error:", e);
+});
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
@@ -58,6 +110,22 @@ const tightLimiter = rateLimit({
 // Healthcheck
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 
+// Klick-Tracking (Client-seitig ausgelöst)
+app.post("/api/click/:id", async (req, res) => {
+  try {
+    const id = req.params.id;
+    const [result] = await pool.query("UPDATE links SET clicks = clicks + 1 WHERE custom_id = ?", [id]);
+    if (result.affectedRows === 0) return res.status(404).json({ error: "Nicht gefunden" });
+    // Webhook best-effort
+    try {
+      sendWebhookEvent('link.clicked', { id, at: new Date().toISOString() });
+    } catch (e) {}
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "Serverfehler" });
+  }
+});
+
 // Hilfsfunktionen
 function getBaseUrl(req) {
   const proto = req.headers["x-forwarded-proto"] || req.protocol || "http";
@@ -66,76 +134,82 @@ function getBaseUrl(req) {
 }
 
 // POST: Link kürzen
-app.post("/api/shorten", tightLimiter, (req, res) => {
-  let { originalUrl, customId } = req.body;
-
-  // Normalize Discord invite URLs
-  if (typeof originalUrl === "string") {
-    originalUrl = originalUrl.trim();
-    originalUrl = originalUrl.replace(/^http:\/\//, "https://");
-    originalUrl = originalUrl.replace(
-      /^https:\/\/discord\.com\/invite\//,
-      "https://discord.gg/"
-    );
-  }
-
-  const isValid =
-    typeof originalUrl === "string" &&
-    (/^https:\/\/discord\.gg\/[a-zA-Z0-9]+$/.test(originalUrl) ||
-      /^https:\/\/discord\.com\/invite\/[a-zA-Z0-9]+$/.test(originalUrl));
-
-  if (!isValid) {
-    return res.status(400).json({ error: "Ungültiger Discord-Link" });
-  }
-
-  if (!customId || !/^[a-zA-Z0-9_-]{3,32}$/.test(customId)) {
-    return res.status(400).json({ error: "Ungültige ID" });
-  }
-
-  if (db.find((link) => link.customId === customId)) {
-    return res.status(409).json({ error: "Diese ID existiert bereits" });
-  }
-
-  const newLink = {
-    originalUrl,
-    customId,
-    clicks: 0,
-    createdAt: new Date().toISOString(),
-  };
-
-  db.push(newLink);
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-
-  const base = getBaseUrl(req);
-  // Fire webhook (non-blocking)
+app.post("/api/shorten", tightLimiter, async (req, res) => {
   try {
-    sendWebhookEvent('link.created', {
-      id: customId,
-      originalUrl,
-      shortUrl: `${base}/${customId}`,
-      clicks: 0,
-      createdAt: newLink.createdAt,
-    });
-  } catch (e) {}
-  res.json({ short: `${base}/${customId}` });
+    let { originalUrl, customId } = req.body || {};
+
+    // Normalize Discord invite URLs
+    if (typeof originalUrl === "string") {
+      originalUrl = originalUrl.trim();
+      originalUrl = originalUrl.replace(/^http:\/\//, "https://");
+      originalUrl = originalUrl.replace(
+        /^https:\/\/discord\.com\/invite\//,
+        "https://discord.gg/"
+      );
+    }
+
+    const isValid =
+      typeof originalUrl === "string" &&
+      (/^https:\/\/discord\.gg\/[a-zA-Z0-9]+$/.test(originalUrl) ||
+        /^https:\/\/discord\.com\/invite\/[a-zA-Z0-9]+$/.test(originalUrl));
+
+    if (!isValid) {
+      return res.status(400).json({ error: "Ungültiger Discord-Link" });
+    }
+
+    if (!customId || !/^[a-zA-Z0-9_-]{3,32}$/.test(customId)) {
+      return res.status(400).json({ error: "Ungültige ID" });
+    }
+
+    // Conflict check
+    const [rows] = await pool.query("SELECT 1 FROM links WHERE custom_id = ? LIMIT 1", [customId]);
+    if (Array.isArray(rows) && rows.length > 0) {
+      return res.status(409).json({ error: "Diese ID existiert bereits" });
+    }
+
+    // Insert
+    await pool.query(
+      "INSERT INTO links (custom_id, original_url, clicks) VALUES (?, ?, 0)",
+      [customId, originalUrl]
+    );
+
+    const base = getBaseUrl(req);
+    // Fire webhook (non-blocking)
+    try {
+      sendWebhookEvent('link.created', {
+        id: customId,
+        originalUrl,
+        shortUrl: `${base}/${customId}`,
+        clicks: 0,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (e) {}
+
+    res.json({ short: `${base}/${customId}` });
+  } catch (e) {
+    console.error("shorten error:", e);
+    res.status(500).json({ error: "Serverfehler" });
+  }
 });
 
 app.get("/api/info/:id", async (req, res) => {
-  const link = db.find((l) => l.customId === req.params.id);
-
-  if (!link) {
-    return res.status(404).json({ error: "Nicht gefunden" });
-  }
-
-  // Invite-Code aus dem Discord-Link extrahieren
-  const inviteMatch = link.originalUrl.match(/discord\.gg\/([a-zA-Z0-9]+)/);
-  const inviteCode = inviteMatch ? inviteMatch[1] : null;
-
-  if (!inviteCode) {
-    return res.status(400).json({ error: "Kein gültiger Invite-Code" });
-  }
-
   try {
+    const id = req.params.id;
+    const [rows] = await pool.query(
+      "SELECT custom_id, original_url FROM links WHERE custom_id = ? LIMIT 1",
+      [id]
+    );
+    const link = Array.isArray(rows) && rows[0];
+    if (!link) return res.status(404).json({ error: "Nicht gefunden" });
+
+    // Invite-Code aus dem Discord-Link extrahieren
+    const inviteMatch = link.original_url.match(/discord\.gg\/([a-zA-Z0-9]+)/);
+    const inviteCode = inviteMatch ? inviteMatch[1] : null;
+
+    if (!inviteCode) {
+      return res.status(400).json({ error: "Kein gültiger Invite-Code" });
+    }
+
     const response = await axios.get(
       `https://discord.com/api/v9/invites/${inviteCode}?with_counts=true&with_expiration=true`
     );
@@ -149,48 +223,15 @@ app.get("/api/info/:id", async (req, res) => {
     res.json({
       name: serverName,
       icon: serverIcon,
-      inviteCode: link.customId,
-      originalUrl: link.originalUrl,
+      inviteCode: link.custom_id,
+      originalUrl: link.original_url,
     });
   } catch (err) {
-    console.error("Fehler beim Abrufen der Discord-Daten:", err.message);
-    return res
-      .status(500)
-      .json({ error: "Discord-Daten konnten nicht geladen werden" });
+    console.error("/api/info error:", err?.message || err);
+    return res.status(500).json({ error: "Discord-Daten konnten nicht geladen werden" });
   }
 });
 
-// Server-seitige Weiterleitung: 302 auf den Original-Discord-Link
-// Nur gültige Kurz-IDs abfangen; reservierte Pfade an SPA/Handler weitergeben
-app.get('/:id([A-Za-z0-9_-]{3,32})', (req, res, next) => {
-  const candidate = (req.params.id || '').toLowerCase();
-  const reserved = new Set(['api','health','uploads','assets','links','redirect','dashboard','favicon.ico','robots.txt','sitemap.xml']);
-  if (reserved.has(candidate)) return next();
-
-  const link = db.find((l) => l.customId === req.params.id);
-  if (!link) return next(); // SPA-Fallback greifen lassen
-  // Klicks zählen (Best-Effort)
-  try {
-    link.clicks = (link.clicks || 0) + 1;
-    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
-  } catch (e) {
-    // ignore write error for redirect speed
-  }
-  // Webhook (best-effort, async)
-  try {
-    const ip = (req.headers['x-forwarded-for']?.toString().split(',')[0].trim()) || req.ip;
-    const ua = req.get('user-agent') || '';
-    sendWebhookEvent('link.clicked', {
-      id: req.params.id,
-      clicks: link.clicks,
-      ip,
-      userAgent: ua,
-      at: new Date().toISOString(),
-    });
-  } catch (e) {}
-
-  res.redirect(302, link.originalUrl);
-});
 
 // SPA Fallback für React Router
 app.get('*', (req, res) => {
@@ -287,64 +328,80 @@ app.post("/api/webhooks/:id/test", tightLimiter, async (req, res) => {
 });
 
 // GET: Aktuelle Links für Frontend
-app.get("/api/recents", (req, res) => {
-  const base = getBaseUrl(req);
-  const recentLinks = db
-    .slice(-8)
-    .reverse()
-    .map((link) => ({
-      id: link.customId,
-      originalUrl: link.originalUrl,
-      shortUrl: `${base}/${link.customId}`,
-      clicks: link.clicks,
-      createdAt: timeSince(new Date(link.createdAt)),
+app.get("/api/recents", async (req, res) => {
+  try {
+    const base = getBaseUrl(req);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 8));
+    const [rows] = await pool.query(
+      "SELECT custom_id, original_url, clicks, created_at FROM links ORDER BY created_at DESC LIMIT ?",
+      [limit]
+    );
+    const recentLinks = (rows || []).map((link) => ({
+      id: link.custom_id,
+      originalUrl: link.original_url,
+      shortUrl: `${base}/${link.custom_id}`,
+      clicks: Number(link.clicks || 0),
+      createdAt: timeSince(new Date(link.created_at)),
     }));
-
-  res.json(recentLinks);
+    res.json(recentLinks);
+  } catch (e) {
+    console.error("/api/recents error:", e?.message || e);
+    res.status(500).json([]);
+  }
 });
 
 // GET: Liste aller Links (paginierte API)
-app.get('/api/links', (req, res) => {
-  const base = getBaseUrl(req);
-  const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
-  const q = (req.query.q || '').toString().toLowerCase();
-  const sortBy = (req.query.sortBy || 'createdAt').toString();
-  const order = (req.query.order || 'desc').toString();
+app.get('/api/links', async (req, res) => {
+  try {
+    const base = getBaseUrl(req);
+    const all = String(req.query.all || '').toLowerCase() === 'true';
+    const page = all ? 1 : Math.max(1, parseInt(req.query.page) || 1);
+    const limit = all ? 100000 : Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
+    const q = (req.query.q || '').toString();
+    const sortByParam = (req.query.sortBy || 'createdAt').toString();
+    const orderParam = (req.query.order || 'desc').toString();
 
-  let items = db.slice();
+    const sortMap = { clicks: 'clicks', id: 'custom_id', createdAt: 'created_at' };
+    const sortBy = sortMap[sortByParam] || 'created_at';
+    const order = orderParam.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-  if (q) {
-    items = items.filter(
-      (l) =>
-        l.customId.toLowerCase().includes(q) ||
-        (l.originalUrl && l.originalUrl.toLowerCase().includes(q))
-    );
-  }
+    const where = q ? "WHERE custom_id LIKE ? OR original_url LIKE ?" : "";
+    const params = q ? [`%${q}%`, `%${q}%`] : [];
 
-  items.sort((a, b) => {
-    const dir = order === 'asc' ? 1 : -1;
-    switch (sortBy) {
-      case 'clicks':
-        return ((a.clicks || 0) - (b.clicks || 0)) * dir;
-      case 'id':
-        return a.customId.localeCompare(b.customId) * dir;
-      default:
-        return (new Date(a.createdAt) - new Date(b.createdAt)) * dir;
+    // total count
+    const [countRows] = await pool.query(`SELECT COUNT(*) AS cnt FROM links ${where}`, params);
+    const total = (countRows && countRows[0] && countRows[0].cnt) || 0;
+
+    // data
+    let rows;
+    if (all) {
+      [rows] = await pool.query(
+        `SELECT custom_id, original_url, clicks, created_at FROM links ${where} ORDER BY ${sortBy} ${order}`,
+        params
+      );
+    } else {
+      const offset = (page - 1) * limit;
+      [rows] = await pool.query(
+        `SELECT custom_id, original_url, clicks, created_at FROM links ${where} ORDER BY ${sortBy} ${order} LIMIT ? OFFSET ?`,
+        [...params, limit, offset]
+      );
     }
-  });
 
-  const total = items.length;
-  const start = (page - 1) * limit;
-  const paged = items.slice(start, start + limit).map((l) => ({
-    id: l.customId,
-    originalUrl: l.originalUrl,
-    shortUrl: `${base}/${l.customId}`,
-    clicks: l.clicks || 0,
-    createdAt: l.createdAt,
-  }));
+    const items = (rows || []).map((l) => ({
+      id: l.custom_id,
+      originalUrl: l.original_url,
+      shortUrl: `${base}/${l.custom_id}`,
+      clicks: Number(l.clicks || 0),
+      createdAt: new Date(l.created_at).toISOString(),
+    }));
 
-  res.json({ items: paged, page, limit, total, totalPages: Math.ceil(total / limit) });
+    const totalPages = all ? 1 : Math.ceil(total / limit);
+    const respLimit = all ? items.length : limit;
+    res.json({ items, page, limit: respLimit, total, totalPages });
+  } catch (e) {
+    console.error('/api/links error:', e?.message || e);
+    res.status(500).json({ items: [], page: 1, limit: 20, total: 0, totalPages: 0 });
+  }
 });
 
 // Hilfsfunktion für Zeitangabe

@@ -81,7 +81,7 @@ export const Links: React.FC = () => {
     const controller = new AbortController();
     setError('');
     setLoading(true);
-    fetch(`/api/links?${query}`, { signal: controller.signal })
+    fetch(`/api/links?all=true&${query}`, { signal: controller.signal })
       .then(async (res) => {
         if (!res.ok) {
           const msg = await res.text().catch(() => '');
