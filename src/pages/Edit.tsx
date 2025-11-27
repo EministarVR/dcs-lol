@@ -122,11 +122,11 @@ const Edit: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-extrabold tracking-tight">Meine Server-Links</h1>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full ring-1 ring-purple-400/20 overflow-hidden bg-gradient-to-br from-purple-500/20 to-blue-500/20">
+            <div className="w-9 h-9 shrink-0 rounded-full ring-2 ring-purple-500/30 overflow-hidden bg-gradient-to-br from-purple-500/20 to-blue-500/20">
               <img
                 src={user.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}
                 alt={user.username}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover block"
                 onError={(e) => {
                   (e.currentTarget as HTMLImageElement).src = 'https://cdn.discordapp.com/embed/avatars/0.png';
                 }}

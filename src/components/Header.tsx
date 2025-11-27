@@ -56,7 +56,13 @@ export const Header: React.FC = () => {
               <>
                 <RLink to="/edit" className="text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium">Meine Links</RLink>
                 <button onClick={logout} className="text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium">Logout</button>
-                <img src={user.avatar || 'https://cdn-icons-png.flaticon.com/512/5968/5968756.png'} alt={user.username} title={user.username} className="w-8 h-8 rounded-full ring-2 ring-purple-500/40" />
+                <img
+                  src={user.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}
+                  alt={user.username}
+                  title={user.username}
+                  className="w-8 h-8 rounded-full ring-2 ring-purple-500/40 object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = 'https://cdn.discordapp.com/embed/avatars/0.png'; }}
+                />
               </>
             ) : (
               <>
