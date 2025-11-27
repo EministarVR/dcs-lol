@@ -3,8 +3,6 @@ import {BrowserRouter as Router, Route, Routes} from "react-router-dom";
 import {Header} from "./components/Header";
 import {Hero} from "./components/Hero";
 import {Features} from "./components/Features";
-import {Stats} from "./components/Stats";
-import {Testimonials} from "./components/Testimonials";
 import {Showcase} from "./components/Showcase";
 import {LastUrl} from "./components/LastUrl";
 import {FAQ} from "./components/FAQ";
@@ -20,8 +18,6 @@ function HomePage() {
             <Header/>
             <Hero/>
             <Features/>
-            <Stats/>
-            <Testimonials/>
             <Showcase/>
             <LastUrl openLinksModal={() => setLinksOpen(true)}/>
             <FAQ/>
