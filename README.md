@@ -158,6 +158,10 @@ DISCORD_REDIRECT_URI=https://DEINE-DOMAIN/api/auth/discord/callback
 
 Troubleshooting
 - Invalid redirect URI: Stelle sicher, dass die Redirect-URL exakt in den Discord OAuth2 Redirects hinterlegt ist (inkl. Schema http/https, Port, Pfad /api/auth/discord/callback).
+  - Lokal (dieses Repo mit npm run start): http://localhost:3000/api/auth/discord/callback
+  - Vite-Dev-Server (Frontend auf 5173, Backend auf 3000): Trotzdem die Backend-URL eintragen: http://localhost:3000/api/auth/discord/callback
+  - Produktion: https://DEINE-DOMAIN/api/auth/discord/callback
+  - Prüfen, was dein Server wirklich verwendet: GET http://localhost:3000/api/auth/discord/redirect-uri liefert den exakten Wert.
 - Cookies/Sessions: In Produktion ist das Cookie "Secure"; stelle sicher, dass du HTTPS verwendest. Bei Proxies X-Forwarded-Proto korrekt setzen.
 - CORS: Das Backend erlaubt Credentials (Cookies). Wenn du ein separates Frontend-Hosting verwendest, konfiguriere die CORS-Origin entsprechend.
 - Zeitabweichungen: Achte auf korrekte Serverzeit; große Abweichungen können beim OAuth-Flow Probleme verursachen.

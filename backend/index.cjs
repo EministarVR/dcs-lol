@@ -240,6 +240,15 @@ function getRedirectUri(req) {
     return getBaseUrl(req) + '/api/auth/discord/callback';
 }
 
+// Helper: returns the exact redirect_uri this server will use
+app.get('/api/auth/discord/redirect-uri', (req, res) => {
+    try {
+        res.json({ redirectUri: getRedirectUri(req) });
+    } catch (e) {
+        res.status(500).json({ error: 'failed', message: e?.message || String(e) });
+    }
+});
+
 app.get('/api/auth/discord/login', (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
     if (!clientId) return res.status(500).json({ error: 'Discord OAuth nicht konfiguriert' });
