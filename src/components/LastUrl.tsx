@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ExternalLink, Copy, Clock, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
@@ -7,37 +7,47 @@ interface RecentLink {
   originalUrl: string;
   shortUrl: string;
   clicks: number;
-  createdAt: string;
+  createdAt: string; // ISO string
 }
 
-export const LastUrl: React.FC = () => {
+interface LastUrlProps { openLinksModal?: () => void }
+export const LastUrl: React.FC<LastUrlProps> = ({ openLinksModal }) => {
   const { t } = useLanguage();
   const [recentLinks, setRecentLinks] = useState<RecentLink[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = useState(3);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 9;
 
-  useEffect(() => {
-    fetch('/api/recents')
+  const refetch = () => {
+    fetch('/api/recents?limit=45')
       .then(res => res.json())
-      .then(setRecentLinks)
+      .then((data: RecentLink[]) => {
+        setRecentLinks(data || []);
+      })
       .catch(err => console.error('Fehler beim Laden der Links:', err));
-  }, []);
+  };
 
+  useEffect(() => { refetch(); }, []);
+
+  // Live-Updates: bei Link-Erstellung und leichtes Polling
   useEffect(() => {
-    const updateItemsPerPage = () => {
-      if (window.innerWidth < 768) {
-        setItemsPerPage(1);
-      } else if (window.innerWidth < 1024) {
-        setItemsPerPage(2);
-      } else {
-        setItemsPerPage(3);
-      }
+    const handler = () => refetch();
+    window.addEventListener('link-created', handler as EventListener);
+    const iv = setInterval(() => refetch(), 30000);
+    return () => {
+      window.removeEventListener('link-created', handler as EventListener);
+      clearInterval(iv);
     };
-
-    updateItemsPerPage();
-    window.addEventListener('resize', updateItemsPerPage);
-    return () => window.removeEventListener('resize', updateItemsPerPage);
   }, []);
+
+  // Korrigiere Seite wenn Daten sich ändern
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(recentLinks.length / pageSize));
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [recentLinks, currentPage]);
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(recentLinks.length / pageSize)), [recentLinks]);
+  const start = (currentPage - 1) * pageSize;
+  const visibleLinks = recentLinks.slice(start, start + pageSize);
 
   const copyToClipboard = async (url: string) => {
     try {
@@ -47,20 +57,21 @@ export const LastUrl: React.FC = () => {
     }
   };
 
-  const nextSlide = () => {
-    setCurrentIndex((prev) => 
-      prev + itemsPerPage >= recentLinks.length ? 0 : prev + itemsPerPage
-    );
+  const fmtRelative = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      const diffMs = Date.now() - d.getTime();
+      const rtf = new Intl.RelativeTimeFormat(navigator.language || 'de-DE', { numeric: 'auto' });
+      const minutes = Math.round(diffMs / 60000);
+      if (Math.abs(minutes) < 60) return rtf.format(-minutes, 'minute');
+      const hours = Math.round(minutes / 60);
+      if (Math.abs(hours) < 24) return rtf.format(-hours, 'hour');
+      const days = Math.round(hours / 24);
+      return rtf.format(-days, 'day');
+    } catch {
+      return new Date(iso).toLocaleString();
+    }
   };
-
-  const prevSlide = () => {
-    setCurrentIndex((prev) => 
-      prev === 0 ? Math.max(0, recentLinks.length - itemsPerPage) : Math.max(0, prev - itemsPerPage)
-    );
-  };
-
-  const visibleLinks = recentLinks.slice(0, 8);
-  const showNavigation = false;
 
   return (
     <section className="py-16 sm:py-24 bg-gradient-to-b from-gray-900 to-black overflow-hidden">
@@ -77,28 +88,7 @@ export const LastUrl: React.FC = () => {
           </p>
         </div>
 
-        {/* Slider Container */}
         <div className="relative">
-          {showNavigation && (
-            <>
-              <button
-                onClick={prevSlide}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-12 sm:h-12 bg-gray-800/80 backdrop-blur-xl border border-gray-700 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-gray-700/80 transition-all duration-300 shadow-lg -ml-2 sm:-ml-6"
-                disabled={currentIndex === 0}
-              >
-                <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-              
-              <button
-                onClick={nextSlide}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 sm:w-12 sm:h-12 bg-gray-800/80 backdrop-blur-xl border border-gray-700 rounded-full flex items-center justify-center text-gray-300 hover:text-white hover:bg-gray-700/80 transition-all duration-300 shadow-lg -mr-2 sm:-mr-6"
-                disabled={currentIndex + itemsPerPage >= recentLinks.length}
-              >
-                <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-            </>
-          )}
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4 sm:px-8">
             {visibleLinks.map((link, index) => (
               <div
@@ -112,7 +102,7 @@ export const LastUrl: React.FC = () => {
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2 text-gray-400">
                     <Clock className="w-4 h-4 flex-shrink-0" />
-                    <span className="text-sm truncate">{link.createdAt}</span>
+                    <span className="text-sm truncate" title={new Date(link.createdAt).toLocaleString()}>{fmtRelative(link.createdAt)}</span>
                   </div>
                   <div className="flex items-center space-x-2 text-green-400">
                     <TrendingUp className="w-4 h-4 flex-shrink-0" />
@@ -169,29 +159,41 @@ export const LastUrl: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {/* Pagination */}
+          {recentLinks.length > pageSize && (
+            <div className="flex items-center justify-between px-4 sm:px-8 mt-8 text-gray-300">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="inline-flex items-center gap-2 bg-gray-800/70 hover:bg-gray-700 disabled:opacity-40 border border-gray-700 rounded-xl px-3 py-2"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>Zurück</span>
+              </button>
+              <div>
+                Seite {currentPage} von {totalPages}
+              </div>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="inline-flex items-center gap-2 bg-gray-800/70 hover:bg-gray-700 disabled:opacity-40 border border-gray-700 rounded-xl px-3 py-2"
+              >
+                <span>Weiter</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Pagination Dots */}
-        {showNavigation && (
-          <div className="flex justify-center mt-8 space-x-2">
-            {Array.from({ length: Math.ceil(recentLinks.length / itemsPerPage) }).map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentIndex(index * itemsPerPage)}
-                className={`w-3 h-3 rounded-full transition-all duration-300 ${
-                  Math.floor(currentIndex / itemsPerPage) === index
-                    ? 'bg-green-400 scale-125'
-                    : 'bg-gray-600 hover:bg-gray-500'
-                }`}
-              />
-            ))}
-          </div>
-        )}
-
         <div className="text-center mt-12">
-          <a href="/links" className="inline-block bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-2xl hover:shadow-green-500/25 transform hover:-translate-y-1">
-            {t('showAll')}
-          </a>
+          {openLinksModal ? (
+            <button onClick={openLinksModal} className="inline-block bg-gradient-to-r from-green-600 to-emerald-600 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-2xl font-bold text-base sm:text-lg hover:from-green-700 hover:to-emerald-700 transition-all duration-300 shadow-2xl hover:shadow-green-500/25 transform hover:-translate-y-1">
+              {t('showAll')}
+            </button>
+          ) : (
+            <span className="text-gray-400 text-sm">Modal nicht verfügbar</span>
+          )}
         </div>
       </div>
     </section>

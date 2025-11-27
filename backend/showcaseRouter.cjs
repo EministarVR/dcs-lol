@@ -50,7 +50,27 @@ function saveShowcase(arr) {
 // GET /api/showcase
 router.get("/showcase", (req, res) => {
   try {
-    res.json(loadShowcase());
+    const raw = loadShowcase();
+    let list = Array.isArray(raw) ? raw : [];
+    // Some legacy files contain an array-of-arrays; flatten one level
+    if (list.length > 0 && Array.isArray(list[0])) {
+      try { list = list.flat(1); } catch { list = [].concat(...list); }
+    }
+    const normalized = list
+      .filter((x) => x && typeof x === 'object')
+      .map((x) => ({
+        id: String(x.id || ''),
+        name: String(x.name || ''),
+        description: typeof x.description === 'string' ? x.description : '',
+        inviteLink: String(x.inviteLink || ''),
+        category: String(x.category || ''),
+        tags: Array.isArray(x.tags) ? x.tags : [],
+        logoUrl: String(x.logoUrl || ''),
+        createdAt: x.createdAt ? new Date(x.createdAt).toISOString() : new Date().toISOString(),
+        featured: Boolean(x.featured),
+        verified: Boolean(x.verified),
+      }));
+    res.json(normalized);
   } catch (e) {
     res.status(500).json({ error: "Fehler beim Laden des Showcase" });
   }

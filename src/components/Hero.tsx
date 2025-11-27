@@ -63,6 +63,8 @@ export const Hero: React.FC = () => {
       if (!res.ok) throw new Error(data.error || "Unbekannter Fehler");
 
       setShortenedUrl(data.short);
+      // Notify other components to refresh recents
+      try { window.dispatchEvent(new Event('link-created')); } catch {}
     } catch (err: any) {
       setError(err.message);
     } finally {

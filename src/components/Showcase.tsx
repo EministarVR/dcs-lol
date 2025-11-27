@@ -69,9 +69,28 @@ export const Showcase: React.FC = () => {
  useEffect(() => {
   fetch('/api/showcase')
     .then(res => res.json())
-    .then((data: ShowcaseEntry[]) => {
+    .then((data: any) => {
+      // normalize defensively in the client (in case backend isn't restarted yet)
+      let list: any[] = Array.isArray(data) ? data : [];
+      if (list.length > 0 && Array.isArray(list[0])) {
+        try { list = list.flat(1); } catch { list = ([] as any[]).concat(...list); }
+      }
+      const normalized: ShowcaseEntry[] = list
+        .filter((x) => x && typeof x === 'object')
+        .map((x) => ({
+          id: String(x.id || ''),
+          name: String(x.name || ''),
+          description: typeof x.description === 'string' ? x.description : '',
+          inviteLink: String(x.inviteLink || ''),
+          category: String(x.category || ''),
+          tags: Array.isArray(x.tags) ? x.tags : [],
+          logoUrl: String(x.logoUrl || ''),
+          createdAt: x.createdAt ? new Date(x.createdAt).toISOString() : new Date().toISOString(),
+          featured: Boolean(x.featured),
+          verified: Boolean(x.verified),
+        }));
       // zuerst all featured nach oben, dann by createdAt desc
-      const sorted = data.sort((a,b) => {
+      const sorted = normalized.sort((a,b) => {
         if (a.featured === b.featured) {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         }
@@ -289,7 +308,7 @@ export const Showcase: React.FC = () => {
                     <div className="flex items-center space-x-2 text-gray-400 text-sm">
                       <span>{new Date(entry.createdAt).toLocaleDateString()}</span>
                       <Users className="w-4 h-4" />
-                      <span>{entry.tags.length} Tags</span>
+                      <span>{Array.isArray(entry.tags) ? entry.tags.length : 0} Tags</span>
                     </div>
                   </div>
                 </div>
@@ -313,7 +332,7 @@ export const Showcase: React.FC = () => {
 
               {/* Tags */}
               <div className="flex flex-wrap gap-2 mb-4">
-                {entry.tags.map((tag, i) => (
+                {(Array.isArray(entry.tags) ? entry.tags : []).map((tag, i) => (
                   <span
                     key={i}
                     className="px-2 py-1 bg-purple-600/20 text-purple-300 text-xs rounded-lg border border-purple-500/30"

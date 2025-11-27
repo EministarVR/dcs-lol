@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink, ArrowRight, Zap } from "lucide-react";
+import { useParams } from "react-router-dom";
 
 interface ServerInfo {
   name: string;
@@ -9,15 +10,18 @@ interface ServerInfo {
 }
 
 export const Redirect: React.FC = () => {
+  const { shortCode } = useParams<{ shortCode: string }>();
   const [serverInfo, setServerInfo] = useState<ServerInfo | null>(null);
   const [countdown, setCountdown] = useState(10);
   const [isLoading, setIsLoading] = useState(true);
+  const trackedRef = useRef(false);
 
   useEffect(() => {
-    const shortCode = window.location.pathname.split("/")[1];
+    const code = (shortCode || window.location.pathname.split("/")[1] || '').trim();
+    if (!code) { setIsLoading(false); return; }
     const loadInfo = async () => {
       try {
-        const res = await fetch(`/api/info/${shortCode}`);
+        const res = await fetch(`/api/info/${code}`);
         if (!res.ok) throw new Error();
         const data = await res.json();
         setServerInfo(data);
@@ -27,13 +31,18 @@ export const Redirect: React.FC = () => {
       setIsLoading(false);
     };
     loadInfo();
-  }, []);
+  }, [shortCode]);
 
   useEffect(() => {
     if (!isLoading && countdown > 0) {
       const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
       return () => clearTimeout(timer);
     } else if (countdown === 0 && serverInfo) {
+      // track exactly once on auto-redirect, then navigate
+      if (!trackedRef.current) {
+        try { fetch(`/api/click/${serverInfo.inviteCode}`, { method: 'POST' }); } catch {}
+        trackedRef.current = true;
+      }
       window.location.href = serverInfo.originalUrl;
     }
   }, [countdown, isLoading, serverInfo]);
@@ -82,6 +91,7 @@ export const Redirect: React.FC = () => {
             <img
               src={serverInfo.icon}
               alt={serverInfo.name}
+              onError={(e) => { const t = e.currentTarget; if (t.src.indexOf('cdn.discordapp.com') !== -1) { t.src = serverInfo.icon.replace(/\.(?:png|webp)(\?.*)?$/,'\.png$1').replace('size=128','size=64'); } else { t.src = 'https://cdn-icons-png.flaticon.com/512/5968/5968756.png'; } }}
               className="w-24 h-24 rounded-xl border-4 border-purple-500/30 shadow-md"
             />
             <div>
@@ -105,7 +115,7 @@ export const Redirect: React.FC = () => {
           </div>
 
           <button
-            onClick={() => window.location.href = serverInfo.originalUrl}
+            onClick={async () => { if (!trackedRef.current) { trackedRef.current = true; try { await fetch(`/api/click/${serverInfo.inviteCode}`, { method: 'POST' }); } catch {} } window.location.href = serverInfo.originalUrl; }}
             className="mt-6 inline-flex items-center justify-center gap-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition text-white font-bold py-3 px-6 rounded-2xl text-lg shadow-xl"
           >
             <ExternalLink className="w-5 h-5" />
