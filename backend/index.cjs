@@ -330,7 +330,16 @@ app.get('/api/auth/discord/callback', async (req, res) => {
         const du = meResp.data || {};
         const discordId = du.id;
         const username = du.global_name || du.username || 'Discord User';
-        const avatar = du.avatar ? `https://cdn.discordapp.com/avatars/${du.id}/${du.avatar}.png` : null;
+        // Build correct Discord avatar URL (gif for animated avatars), include size for consistency
+        let avatar = null;
+        if (du.avatar) {
+            const isAnimated = String(du.avatar).startsWith('a_');
+            const ext = isAnimated ? 'gif' : 'png';
+            avatar = `https://cdn.discordapp.com/avatars/${du.id}/${du.avatar}.${ext}?size=128`;
+        } else {
+            // Fallback to a default embed avatar
+            avatar = 'https://cdn.discordapp.com/embed/avatars/0.png';
+        }
         if (!discordId) {
             setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
             return res.redirect('/login?error=oauth_user');

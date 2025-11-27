@@ -113,24 +113,40 @@ const Edit: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900 text-white px-6 py-10">
-      <div className="max-w-5xl mx-auto">
+    <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white flex items-start justify-center px-6 py-12 overflow-hidden">
+      {/* background orbs to match Login/Register */}
+      <div className="pointer-events-none absolute -top-24 -left-24 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-24 -right-24 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl" />
+
+      <div className="relative max-w-5xl w-full bg-gray-900/70 backdrop-blur-xl p-8 md:p-10 rounded-2xl border border-gray-800 shadow-2xl shadow-purple-500/10">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-black">Meine Server-Links</h1>
+          <h1 className="text-3xl font-extrabold tracking-tight">Meine Server-Links</h1>
           <div className="flex items-center gap-3">
-            <img src={user.avatar || 'https://cdn-icons-png.flaticon.com/512/5968/5968756.png'} alt={user.username} className="w-8 h-8 rounded-full" />
-            <span className="text-gray-200">{user.username}</span>
-            <button onClick={logout} className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-xl">Logout</button>
+            <div className="w-9 h-9 rounded-full ring-1 ring-purple-400/20 overflow-hidden bg-gradient-to-br from-purple-500/20 to-blue-500/20">
+              <img
+                src={user.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}
+                alt={user.username}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).src = 'https://cdn.discordapp.com/embed/avatars/0.png';
+                }}
+              />
+            </div>
+            <span className="text-gray-200 text-sm md:text-base">{user.username}</span>
+            <button onClick={logout} className="bg-gray-800/70 hover:bg-gray-700 text-white px-4 py-2 rounded-xl transition">Logout</button>
           </div>
         </div>
 
         {error && (
-          <div className="mb-6 bg-red-500/10 border border-red-400/40 text-red-200 px-4 py-3 rounded-xl">{error}</div>
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm leading-relaxed">{error}</div>
+          </div>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {items.map(link => (
-            <div key={link.id} className="bg-gray-800/50 border border-gray-700/50 rounded-2xl p-5">
+            <div key={link.id} className="bg-gray-900/60 border border-gray-800 rounded-2xl p-5 transition hover:border-gray-700">
               <div className="text-sm text-gray-400 mb-2">Erstellt am {new Date(link.createdAt).toLocaleString()}</div>
               <div className="text-lg font-semibold">{window.location.origin}/{link.id}</div>
               <div className="text-gray-300 break-all">{link.originalUrl}</div>
@@ -138,11 +154,11 @@ const Edit: React.FC = () => {
 
               {editId === link.id ? (
                 <div className="mt-4 space-y-3">
-                  <input value={formUrl} onChange={e => setFormUrl(e.target.value)} className="w-full bg-gray-900/60 border border-gray-700 rounded-xl px-3 py-2" placeholder="Neuer Discord-Link (https://discord.gg/...)" />
-                  <input value={formSlug} onChange={e => setFormSlug(e.target.value)} className="w-full bg-gray-900/60 border border-gray-700 rounded-xl px-3 py-2" placeholder={`Neue ID (optional, z.B. ${link.id})`} />
+                  <input value={formUrl} onChange={e => setFormUrl(e.target.value)} className="w-full bg-gray-950/60 border border-gray-800 focus:border-purple-600/50 outline-none rounded-xl px-3 py-2 text-sm" placeholder="Neuer Discord-Link (https://discord.gg/...)" />
+                  <input value={formSlug} onChange={e => setFormSlug(e.target.value)} className="w-full bg-gray-950/60 border border-gray-800 focus:border-purple-600/50 outline-none rounded-xl px-3 py-2 text-sm" placeholder={`Neue ID (optional, z.B. ${link.id})`} />
                   <div className="flex gap-3">
                     <button onClick={saveEdit} disabled={busy} className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-xl disabled:opacity-60"><Save className="w-4 h-4" /> Speichern</button>
-                    <button onClick={cancelEdit} className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-xl">Abbrechen</button>
+                    <button onClick={cancelEdit} className="bg-gray-800/70 hover:bg-gray-700 px-4 py-2 rounded-xl">Abbrechen</button>
                   </div>
                 </div>
               ) : (
@@ -158,7 +174,7 @@ const Edit: React.FC = () => {
         {items.length === 0 && (
           <div className="text-center text-gray-300 mt-16">
             Du hast noch keine Links erstellt.
-            <div className="mt-3"><RLink to="/" className="text-purple-300 underline">Jetzt Link erstellen</RLink></div>
+            <div className="mt-3"><RLink to="/" className="text-purple-300 underline underline-offset-4">Jetzt Link erstellen</RLink></div>
           </div>
         )}
       </div>
