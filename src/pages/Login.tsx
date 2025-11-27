@@ -1,10 +1,46 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogIn, Shield } from 'lucide-react';
-import { Link as RLink } from 'react-router-dom';
+import { LogIn, Shield, AlertCircle } from 'lucide-react';
+import { Link as RLink, useLocation } from 'react-router-dom';
 
 const Login: React.FC = () => {
   const { login } = useAuth();
+  const location = useLocation();
+  const initialError = useMemo(() => new URLSearchParams(location.search).get('error') || '', [location.search]);
+  const [error, setError] = useState(initialError);
+
+  useEffect(() => {
+    if (initialError) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('error');
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, [initialError]);
+
+  const errorText = useMemo(() => {
+    if (!error) return '';
+    switch (error) {
+      case 'oauth_missing_code':
+        return 'Discord hat keinen Code zurückgegeben. Bitte versuche es erneut.';
+      case 'oauth_state':
+        return 'Sicherheitsüberprüfung fehlgeschlagen (State). Bitte erneut anmelden.';
+      case 'oauth_access_denied':
+        return 'Du hast den Zugriff abgelehnt. Bitte erlaube den Zugriff, um fortzufahren.';
+      case 'oauth_interaction_required':
+        return 'Interaktion erforderlich. Bitte stimme im Discord-Fenster zu und versuche es erneut.';
+      case 'oauth_not_configured':
+        return 'Discord OAuth ist derzeit nicht richtig konfiguriert.';
+      case 'oauth_token':
+        return 'Token-Austausch mit Discord fehlgeschlagen. Bitte später erneut versuchen.';
+      case 'oauth_user':
+        return 'Benutzerinformationen konnten nicht geladen werden.';
+      case 'login_failed':
+        return 'Login fehlgeschlagen. Bitte später erneut versuchen.';
+      default:
+        return 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.';
+    }
+  }, [error]);
+
   return (
     <div className="relative min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black flex items-center justify-center px-6 py-12 overflow-hidden">
       {/* background orbs */}
@@ -16,7 +52,16 @@ const Login: React.FC = () => {
           <Shield className="text-white w-8 h-8" />
         </div>
         <h1 className="text-3xl font-extrabold text-white mb-2 tracking-tight">Anmelden</h1>
-        <p className="text-gray-300 mb-8">Melde dich mit Discord an, um deine Server‑Links zu verwalten.</p>
+        <p className="text-gray-300 mb-6">Melde dich mit Discord an, um deine Server‑Links zu verwalten.</p>
+
+        {errorText && (
+          <div className="mb-6 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 p-4 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm leading-relaxed">{errorText}</div>
+            <button onClick={() => setError('')} className="ml-auto text-red-300 hover:text-red-100 text-xs">Schließen</button>
+          </div>
+        )}
+
         <button onClick={login} className="w-full inline-flex items-center justify-center gap-3 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold py-3 px-6 rounded-xl transition shadow-lg shadow-indigo-500/10">
           <LogIn className="w-5 h-5" />
           Mit Discord anmelden

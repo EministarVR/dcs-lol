@@ -263,8 +263,7 @@ app.get('/api/auth/discord/login', (req, res) => {
         redirect_uri: redirectUri,
         response_type: 'code',
         scope: 'identify',
-        state,
-        prompt: 'none'
+        state
     });
     const url = `https://discord.com/oauth2/authorize?${params.toString()}`;
     res.redirect(url);
@@ -272,16 +271,32 @@ app.get('/api/auth/discord/login', (req, res) => {
 
 app.get('/api/auth/discord/callback', async (req, res) => {
     try {
-        const code = req.query.code;
-        const state = req.query.state;
+        const { code, state, error: oauthError } = req.query;
         const cookies = parseCookies(req.headers.cookie || '');
-        if (!code) return res.status(400).send('Missing code');
-        if (!state || cookies.oauth_state !== state) return res.status(400).send('Invalid state');
+
+        // If Discord returned an explicit error (e.g., access_denied, interaction_required)
+        if (oauthError) {
+            setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
+            return res.redirect('/login?error=oauth_' + encodeURIComponent(String(oauthError)));
+        }
+
+        if (!state || cookies.oauth_state !== state) {
+            setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
+            return res.redirect('/login?error=oauth_state');
+        }
+
+        if (!code) {
+            setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
+            return res.redirect('/login?error=oauth_missing_code');
+        }
 
         const clientId = process.env.DISCORD_CLIENT_ID;
         const clientSecret = process.env.DISCORD_CLIENT_SECRET;
         const redirectUri = getRedirectUri(req);
-        if (!clientId || !clientSecret) return res.status(500).send('Discord OAuth not configured');
+        if (!clientId || !clientSecret) {
+            setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
+            return res.redirect('/login?error=oauth_not_configured');
+        }
 
         // Exchange code for token
         const body = new URLSearchParams({
@@ -295,7 +310,10 @@ app.get('/api/auth/discord/callback', async (req, res) => {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
         const accessToken = tokenResp.data && tokenResp.data.access_token;
-        if (!accessToken) return res.status(400).send('Token failed');
+        if (!accessToken) {
+            setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
+            return res.redirect('/login?error=oauth_token');
+        }
 
         // Fetch user
         const meResp = await axios.get('https://discord.com/api/v10/users/@me', {
@@ -305,7 +323,10 @@ app.get('/api/auth/discord/callback', async (req, res) => {
         const discordId = du.id;
         const username = du.global_name || du.username || 'Discord User';
         const avatar = du.avatar ? `https://cdn.discordapp.com/avatars/${du.id}/${du.avatar}.png` : null;
-        if (!discordId) return res.status(400).send('No user');
+        if (!discordId) {
+            setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
+            return res.redirect('/login?error=oauth_user');
+        }
 
         // Upsert user
         const [rows] = await pool.query('SELECT id FROM users WHERE discord_id = ? LIMIT 1', [discordId]);
@@ -327,7 +348,9 @@ app.get('/api/auth/discord/callback', async (req, res) => {
         res.redirect('/edit');
     } catch (e) {
         console.error('discord callback error:', e?.response?.data || e?.message || e);
-        res.status(500).send('Login fehlgeschlagen');
+        // Best-effort cleanup and redirect to login with generic error
+        try { setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 }); } catch {}
+        res.redirect('/login?error=login_failed');
     }
 });
 
