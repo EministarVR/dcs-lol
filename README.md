@@ -111,7 +111,7 @@ So bindest du den Discord Login ein:
 - Öffne in deiner App den Reiter "OAuth2" → "General".
 - Setze bei "Redirects" die Callback-URL:
   - Produktion/Server: https://DEINE-DOMAIN/api/auth/discord/callback
-  - Lokal (falls über Browser erreichbar): http://localhost:49623/api/auth/discord/callback
+  - Lokal (falls über Browser erreichbar): http://localhost:3000/api/auth/discord/callback
 - Klicke auf "Save Changes".
 
 Hinweis: Alternativ kannst du in der .env die Variable DISCORD_REDIRECT_URI setzen. Dann muss die dort konfigurierte URL 1:1 auch im Developer Portal unter Redirects hinterlegt sein.
