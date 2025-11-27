@@ -10,6 +10,10 @@ import {CTA} from "./components/CTA";
 import {Footer} from "./components/Footer";
 import {Redirect} from "./pages/Redirect";
 import LinksModal from "./components/LinksModal";
+import { AuthProvider } from "./contexts/AuthContext";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Edit from "./pages/Edit";
 
 function HomePage() {
     const [linksOpen, setLinksOpen] = React.useState(false);
@@ -30,13 +34,18 @@ function HomePage() {
 
 function App() {
     return (
-        <Router>
-            <Routes>
-                <Route path="/" element={<HomePage/>}/>
-                <Route path="/redirect" element={<Redirect/>}/>
-                <Route path="/:shortCode" element={<Redirect/>}/>
-            </Routes>
-        </Router>
+        <AuthProvider>
+            <Router>
+                <Routes>
+                    <Route path="/" element={<HomePage/>}/>
+                    <Route path="/login" element={<Login/>}/>
+                    <Route path="/register" element={<Register/>}/>
+                    <Route path="/edit" element={<Edit/>}/>
+                    <Route path="/redirect" element={<Redirect/>}/>
+                    <Route path="/:shortCode" element={<Redirect/>}/>
+                </Routes>
+            </Router>
+        </AuthProvider>
     );
 }
 

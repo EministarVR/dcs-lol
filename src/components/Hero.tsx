@@ -7,13 +7,17 @@ import {
   Zap,
   QrCode,
   Webhook,
+  Info,
 } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 import { QRGenerator } from "./QRGenerator";
 import { WebhookManager } from "./WebhookManager";
+import { useAuth } from "../contexts/AuthContext";
+import { Link as RLink } from "react-router-dom";
 
 export const Hero: React.FC = () => {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [inputUrl, setInputUrl] = useState("");
   const [customId, setCustomId] = useState("");
   const [shortenedUrl, setShortenedUrl] = useState("");
@@ -55,6 +59,7 @@ export const Hero: React.FC = () => {
       const res = await fetch("/api/shorten", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: 'include',
         body: JSON.stringify({ originalUrl: inputUrl, customId: customId }),
       });
 
@@ -112,13 +117,25 @@ export const Hero: React.FC = () => {
               <span className="text-white">{t("heroSubtitle")}</span>
             </h1>
 
-            <p className="text-lg sm:text-xl md:text-2xl text-gray-300 mb-16 max-w-4xl mx-auto leading-relaxed px-4">
+            <p className="text-lg sm:text-xl md:text-2xl text-gray-300 mb-6 max-w-4xl mx-auto leading-relaxed px-4">
               {t("heroDescription")}{" "}
               <span className="text-purple-400 font-semibold">
                 {" "}
                 {t("heroHighlight")}
               </span>
             </p>
+
+            {!user && (
+              <div className="max-w-3xl mx-auto mb-6 px-4">
+                <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-400/30 rounded-2xl p-4 text-left">
+                  <Info className="w-5 h-5 text-amber-300 mt-0.5" />
+                  <div className="text-amber-100 text-sm">
+                    <b>Wichtig:</b> Erstelle zuerst einen Account, dann deinen Kurzlink. Links, die <i>ohne</i> Account erstellt werden, können später nicht bearbeitet oder deinem Konto zugeordnet werden. {" "}
+                    <RLink to="/register" className="underline text-amber-200 hover:text-amber-100">Jetzt registrieren</RLink>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="max-w-3xl mx-auto mb-20 px-4">
               <div className="bg-gray-800/40 backdrop-blur-2xl rounded-3xl p-6 sm:p-8 md:p-12 shadow-2xl border border-gray-700/50">

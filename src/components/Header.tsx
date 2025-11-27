@@ -2,10 +2,13 @@ import React, { useState } from 'react';
 import { Link, Menu, X } from 'lucide-react';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useAuth } from '../contexts/AuthContext';
+import { Link as RLink } from 'react-router-dom';
 
 export const Header: React.FC = () => {
   const { t } = useLanguage();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, login, logout } = useAuth();
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -21,7 +24,7 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="relative z-50 w-full bg-gray-900/90 backdrop-blur-xl border-b border-gray-800">
+    <header className="sticky top-0 z-50 w-full bg-gray-900/80 backdrop-blur-xl border-b border-gray-800/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
           {/* Logo */}
@@ -49,12 +52,24 @@ export const Header: React.FC = () => {
               {t('about')}
             </button>
             <LanguageSwitcher />
-            <button 
-              onClick={scrollToTop}
-              className="bg-gradient-to-r from-purple-500 to-blue-600 text-white px-6 py-2 rounded-full hover:from-purple-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-            >
-              {t('getStarted')}
-            </button>
+            {user ? (
+              <>
+                <RLink to="/edit" className="text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium">Meine Links</RLink>
+                <button onClick={logout} className="text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium">Logout</button>
+                <img src={user.avatar || 'https://cdn-icons-png.flaticon.com/512/5968/5968756.png'} alt={user.username} title={user.username} className="w-8 h-8 rounded-full ring-2 ring-purple-500/40" />
+              </>
+            ) : (
+              <>
+                <RLink to="/login" className="px-4 py-2 rounded-full border border-gray-700/70 text-gray-200 hover:text-white hover:border-purple-500/50 hover:bg-gray-800/60 transition-all duration-200 font-medium">Login</RLink>
+                <RLink to="/register" className="px-5 py-2 rounded-full bg-gradient-to-r from-purple-500 to-blue-600 text-white hover:from-purple-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg hover:shadow-purple-500/30">Registrieren</RLink>
+                <button 
+                  onClick={scrollToTop}
+                  className="px-5 py-2 rounded-full border border-gray-700/70 text-gray-200 hover:text-white hover:border-purple-500/50 hover:bg-gray-800/60 transition-all duration-200 font-medium"
+                >
+                  {t('getStarted')}
+                </button>
+              </>
+            )}
           </nav>
           
           {/* Mobile Menu Button */}
@@ -90,6 +105,17 @@ export const Header: React.FC = () => {
               >
                 {t('about')}
               </button>
+              {user ? (
+                <>
+                  <RLink to="/edit" onClick={() => setIsMenuOpen(false)} className="block w-full text-left text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium py-3 px-4 rounded-lg hover:bg-gray-800/50">Meine Links</RLink>
+                  <button onClick={() => { logout(); setIsMenuOpen(false); }} className="block w-full text-left text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium py-3 px-4 rounded-lg hover:bg-gray-800/50">Logout</button>
+                </>
+              ) : (
+                <>
+                  <RLink to="/login" onClick={() => setIsMenuOpen(false)} className="block w-full text-left text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium py-3 px-4 rounded-lg hover:bg-gray-800/50">Login</RLink>
+                  <RLink to="/register" onClick={() => setIsMenuOpen(false)} className="block w-full text-left text-gray-300 hover:text-purple-400 transition-colors duration-200 font-medium py-3 px-4 rounded-lg hover:bg-gray-800/50">Registrieren</RLink>
+                </>
+              )}
               <button 
                 onClick={scrollToTop}
                 className="block w-full bg-gradient-to-r from-purple-500 to-blue-600 text-white py-3 px-4 rounded-lg hover:from-purple-600 hover:to-blue-700 transition-all duration-200 font-medium shadow-lg text-center"

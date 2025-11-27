@@ -9,6 +9,7 @@ const rateLimit = require("express-rate-limit");
 const compression = require("compression");
 const morgan = require("morgan");
 const mysql = require("mysql2/promise");
+const crypto = require("crypto");
 require("dotenv").config({path: path.join(__dirname, "..", ".env")});
 const {router: showcaseRouter, UPLOADS_DIR} = require("./showcaseRouter.cjs");
 const app = express();
@@ -40,28 +41,41 @@ const LEGACY_DB_FILE = path.join(__dirname, "links.json");
 const SHOWCASE_DB_FILE = path.join(__dirname, "showcase.json");
 
 async function ensureSchema() {
-    const createSql = `
-        CREATE TABLE IF NOT EXISTS links
-        (
-            id
-            BIGINT
-            AUTO_INCREMENT
-            PRIMARY
-            KEY,
-            custom_id
-            VARCHAR
-        (
-            64
-        ) NOT NULL UNIQUE,
-            original_url VARCHAR
-        (
-            2048
-        ) NOT NULL,
+    // Links table
+    const createLinksSql = `
+        CREATE TABLE IF NOT EXISTS links (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            custom_id VARCHAR(64) NOT NULL UNIQUE,
+            original_url VARCHAR(2048) NOT NULL,
             clicks BIGINT NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `;
-    await pool.query(createSql);
+    await pool.query(createLinksSql);
+
+    // Users table for Discord auth
+    const createUsersSql = `
+        CREATE TABLE IF NOT EXISTS users (
+            id BIGINT AUTO_INCREMENT PRIMARY KEY,
+            discord_id VARCHAR(64) NOT NULL UNIQUE,
+            username VARCHAR(128) NOT NULL,
+            avatar VARCHAR(256) NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `;
+    await pool.query(createUsersSql);
+
+    // Add user_id column to links if missing
+    try {
+        await pool.query("ALTER TABLE links ADD COLUMN user_id BIGINT NULL");
+    } catch (e) {
+        // ignore if exists
+    }
+    try {
+        await pool.query("CREATE INDEX idx_links_user_id ON links(user_id)");
+    } catch (e) {
+        // ignore if exists
+    }
 
     // Optional: Import aus alter JSON-Datei, falls Tabelle leer
     try {
@@ -101,9 +115,68 @@ app.use(helmet({
     crossOriginResourcePolicy: {policy: "cross-origin"},
 }));
 app.use(compression());
-app.use(cors());
+app.use(cors({ credentials: true, origin: true }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json({limit: "1mb"}));
+
+// Minimal cookie utils
+function parseCookies(header) {
+    const list = {};
+    if (!header) return list;
+    header.split(';').forEach(cookie => {
+        const parts = cookie.split('=');
+        const key = decodeURIComponent(parts.shift().trim());
+        const value = decodeURIComponent(parts.join('=').trim());
+        if (key) list[key] = value;
+    });
+    return list;
+}
+
+function base64url(input) {
+    return Buffer.from(input).toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+}
+
+const SESSION_SECRET = process.env.SESSION_SECRET || 'change_me_dev_secret';
+
+function signSession(payload) {
+    const data = JSON.stringify(payload);
+    const sig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64');
+    return base64url(data) + '.' + base64url(sig);
+}
+
+function verifySession(token) {
+    if (!token || token.indexOf('.') === -1) return null;
+    const [dataB64, sigB64] = token.split('.');
+    try {
+        const data = Buffer.from(dataB64.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+        const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(data).digest('base64');
+        const givenSig = Buffer.from(sigB64.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+        if (expectedSig !== givenSig) return null;
+        return JSON.parse(data);
+    } catch (e) { return null; }
+}
+
+function setCookie(res, name, value, options = {}) {
+    const parts = [`${name}=${encodeURIComponent(value)}`];
+    if (options.maxAge) parts.push(`Max-Age=${Math.floor(options.maxAge)}`);
+    if (options.httpOnly !== false) parts.push('HttpOnly');
+    if (options.sameSite) parts.push(`SameSite=${options.sameSite}`); else parts.push('SameSite=Lax');
+    if (options.secure || process.env.NODE_ENV === 'production') parts.push('Secure');
+    parts.push('Path=/');
+    res.setHeader('Set-Cookie', parts.join('; '));
+}
+
+// attach auth to req
+app.use((req, res, next) => {
+    try {
+        const cookies = parseCookies(req.headers.cookie || '');
+        const session = verifySession(cookies.session);
+        if (session && session.userId) {
+            req.user = { id: session.userId, username: session.username, avatar: session.avatar };
+        }
+    } catch (e) {}
+    next();
+});
 
 // Serve static files (prefer built assets from /dist in production)
 const DIST_DIR = path.join(__dirname, "..", "dist");
@@ -155,6 +228,110 @@ const tightLimiter = rateLimit({
 // Healthcheck
 app.get("/health", (req, res) => res.json({status: "ok"}));
 
+// Auth endpoints (Discord OAuth)
+function requireAuth(req, res, next) {
+    if (!req.user) return res.status(401).json({ error: 'Nicht eingeloggt' });
+    next();
+}
+
+function getRedirectUri(req) {
+    const envCb = process.env.DISCORD_REDIRECT_URI;
+    if (envCb && envCb.trim()) return envCb.trim();
+    return getBaseUrl(req) + '/api/auth/discord/callback';
+}
+
+app.get('/api/auth/discord/login', (req, res) => {
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ error: 'Discord OAuth nicht konfiguriert' });
+
+    const stateRaw = JSON.stringify({ t: Date.now(), nonce: Math.random().toString(36).slice(2) });
+    const state = base64url(stateRaw);
+    setCookie(res, 'oauth_state', state, { httpOnly: true, sameSite: 'Lax', maxAge: 600 });
+
+    const redirectUri = getRedirectUri(req);
+    const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: 'identify',
+        state,
+        prompt: 'none'
+    });
+    const url = `https://discord.com/oauth2/authorize?${params.toString()}`;
+    res.redirect(url);
+});
+
+app.get('/api/auth/discord/callback', async (req, res) => {
+    try {
+        const code = req.query.code;
+        const state = req.query.state;
+        const cookies = parseCookies(req.headers.cookie || '');
+        if (!code) return res.status(400).send('Missing code');
+        if (!state || cookies.oauth_state !== state) return res.status(400).send('Invalid state');
+
+        const clientId = process.env.DISCORD_CLIENT_ID;
+        const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+        const redirectUri = getRedirectUri(req);
+        if (!clientId || !clientSecret) return res.status(500).send('Discord OAuth not configured');
+
+        // Exchange code for token
+        const body = new URLSearchParams({
+            client_id: clientId,
+            client_secret: clientSecret,
+            grant_type: 'authorization_code',
+            code: String(code),
+            redirect_uri: redirectUri
+        });
+        const tokenResp = await axios.post('https://discord.com/api/v10/oauth2/token', body.toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        const accessToken = tokenResp.data && tokenResp.data.access_token;
+        if (!accessToken) return res.status(400).send('Token failed');
+
+        // Fetch user
+        const meResp = await axios.get('https://discord.com/api/v10/users/@me', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        const du = meResp.data || {};
+        const discordId = du.id;
+        const username = du.global_name || du.username || 'Discord User';
+        const avatar = du.avatar ? `https://cdn.discordapp.com/avatars/${du.id}/${du.avatar}.png` : null;
+        if (!discordId) return res.status(400).send('No user');
+
+        // Upsert user
+        const [rows] = await pool.query('SELECT id FROM users WHERE discord_id = ? LIMIT 1', [discordId]);
+        let userId;
+        if (Array.isArray(rows) && rows.length > 0) {
+            userId = rows[0].id;
+            await pool.query('UPDATE users SET username = ?, avatar = ? WHERE id = ?', [username, avatar, userId]);
+        } else {
+            const [resIns] = await pool.query('INSERT INTO users (discord_id, username, avatar) VALUES (?, ?, ?)', [discordId, username, avatar]);
+            userId = resIns.insertId;
+        }
+
+        const token = signSession({ userId, username, avatar });
+        setCookie(res, 'session', token, { httpOnly: true, sameSite: 'Lax', maxAge: 30 * 24 * 60 * 60 });
+        // clear state
+        setCookie(res, 'oauth_state', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
+
+        // Redirect to dashboard
+        res.redirect('/edit');
+    } catch (e) {
+        console.error('discord callback error:', e?.response?.data || e?.message || e);
+        res.status(500).send('Login fehlgeschlagen');
+    }
+});
+
+app.get('/api/me', (req, res) => {
+    if (!req.user) return res.json({ user: null });
+    res.json({ user: req.user });
+});
+
+app.post('/api/logout', (req, res) => {
+    setCookie(res, 'session', '', { httpOnly: true, sameSite: 'Lax', maxAge: 1 });
+    res.json({ ok: true });
+});
+
 // Klick-Tracking (Client-seitig ausgelöst)
 app.post("/api/click/:id", async (req, res) => {
     try {
@@ -183,6 +360,7 @@ function getBaseUrl(req) {
 app.post("/api/shorten", tightLimiter, async (req, res) => {
     try {
         let {originalUrl, customId} = req.body || {};
+        const ownerId = req.user?.id || null;
 
         // Normalize Discord invite URLs
         if (typeof originalUrl === "string") {
@@ -215,8 +393,8 @@ app.post("/api/shorten", tightLimiter, async (req, res) => {
 
         // Insert
         await pool.query(
-            "INSERT INTO links (custom_id, original_url, clicks) VALUES (?, ?, 0)",
-            [customId, originalUrl]
+            "INSERT INTO links (custom_id, original_url, clicks, user_id) VALUES (?, ?, 0, ?)",
+            [customId, originalUrl, ownerId]
         );
 
         const base = getBaseUrl(req);
@@ -391,6 +569,84 @@ app.get("/api/recents", async (req, res) => {
     } catch (e) {
         console.error("/api/recents error:", e?.message || e);
         res.status(500).json([]);
+    }
+});
+
+// Meine Links APIs (require auth)
+app.get('/api/my/links', requireAuth, async (req, res) => {
+    try {
+        const base = getBaseUrl(req);
+        const [rows] = await pool.query(
+            'SELECT custom_id, original_url, clicks, created_at FROM links WHERE user_id = ? ORDER BY created_at DESC',
+            [req.user.id]
+        );
+        const items = (rows || []).map(l => ({
+            id: l.custom_id,
+            originalUrl: l.original_url,
+            shortUrl: `${base}/${l.custom_id}`,
+            clicks: Number(l.clicks || 0),
+            createdAt: new Date(l.created_at).toISOString(),
+        }));
+        res.json({ items });
+    } catch (e) {
+        console.error('/api/my/links error:', e?.message || e);
+        res.status(500).json({ items: [] });
+    }
+});
+
+app.patch('/api/my/links/:id', requireAuth, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { originalUrl, newCustomId } = req.body || {};
+
+        // Check ownership
+        const [rows] = await pool.query('SELECT id, custom_id, original_url, user_id FROM links WHERE custom_id = ? LIMIT 1', [id]);
+        const link = Array.isArray(rows) && rows[0];
+        if (!link) return res.status(404).json({ error: 'Link nicht gefunden' });
+        if (!link.user_id || link.user_id !== req.user.id) return res.status(403).json({ error: 'Kein Zugriff' });
+
+        const updates = [];
+        const params = [];
+        if (typeof originalUrl === 'string' && originalUrl.trim()) {
+            let url = originalUrl.trim().replace(/^http:\/\//, 'https://');
+            url = url.replace(/^https:\/\/discord\.com\/invite\//, 'https://discord.gg/');
+            if (!/^https:\/\/discord\.(gg|com\/invite)\/[a-zA-Z0-9]+$/.test(url)) {
+                return res.status(400).json({ error: 'Ungültiger Discord-Link' });
+            }
+            updates.push('original_url = ?');
+            params.push(url);
+        }
+        if (typeof newCustomId === 'string' && newCustomId.trim()) {
+            const slug = newCustomId.trim();
+            if (!/^[a-zA-Z0-9_-]{3,32}$/.test(slug)) return res.status(400).json({ error: 'Ungültige ID' });
+            // check conflict
+            const [conf] = await pool.query('SELECT 1 FROM links WHERE custom_id = ? LIMIT 1', [slug]);
+            if (Array.isArray(conf) && conf.length > 0) return res.status(409).json({ error: 'Diese ID existiert bereits' });
+            updates.push('custom_id = ?');
+            params.push(slug);
+        }
+        if (updates.length === 0) return res.json({ ok: true });
+        params.push(id);
+        await pool.query(`UPDATE links SET ${updates.join(', ')} WHERE custom_id = ?`, params);
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('patch /api/my/links error:', e?.message || e);
+        res.status(500).json({ error: 'Serverfehler' });
+    }
+});
+
+app.delete('/api/my/links/:id', requireAuth, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const [rows] = await pool.query('SELECT user_id FROM links WHERE custom_id = ? LIMIT 1', [id]);
+        const link = Array.isArray(rows) && rows[0];
+        if (!link) return res.status(404).json({ error: 'Link nicht gefunden' });
+        if (!link.user_id || link.user_id !== req.user.id) return res.status(403).json({ error: 'Kein Zugriff' });
+        await pool.query('DELETE FROM links WHERE custom_id = ?', [id]);
+        res.json({ ok: true });
+    } catch (e) {
+        console.error('delete /api/my/links error:', e?.message || e);
+        res.status(500).json({ error: 'Serverfehler' });
     }
 });
 

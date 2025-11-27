@@ -95,3 +95,69 @@ Logo, Style & Marke dcs.lol © EministarVR 2025.
 
 
 ---
+
+
+---
+
+## 🔐 Discord Login einrichten (Discord Developer Portal)
+
+So bindest du den Discord Login ein:
+
+1) App im Discord Developer Portal anlegen
+- Gehe zu https://discord.com/developers/applications und klicke auf "New Application".
+- Vergib einen Namen (z. B. dcs.lol) und erstelle die App.
+
+2) OAuth2-Einstellungen konfigurieren
+- Öffne in deiner App den Reiter "OAuth2" → "General".
+- Setze bei "Redirects" die Callback-URL:
+  - Produktion/Server: https://DEINE-DOMAIN/api/auth/discord/callback
+  - Lokal (falls über Browser erreichbar): http://localhost:49623/api/auth/discord/callback
+- Klicke auf "Save Changes".
+
+Hinweis: Alternativ kannst du in der .env die Variable DISCORD_REDIRECT_URI setzen. Dann muss die dort konfigurierte URL 1:1 auch im Developer Portal unter Redirects hinterlegt sein.
+
+3) Client-ID und Secret kopieren
+- Reiter "General Information": kopiere die "CLIENT ID".
+- Reiter "OAuth2" → "Client Secrets": generiere/kopiere ein "CLIENT SECRET".
+
+4) .env konfigurieren
+- Erstelle die Datei .env (auf Basis von .env.example) im Projekt-Root und trage ein:
+
+```
+# Server
+PORT=49623
+
+# MySQL
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=dcs_user
+MYSQL_PASSWORD=change_me
+MYSQL_DATABASE=dcs
+
+# Auth & Discord OAuth
+SESSION_SECRET=ein_langes_geheimes_passwort
+DISCORD_CLIENT_ID=DEINE_CLIENT_ID
+DISCORD_CLIENT_SECRET=DEIN_CLIENT_SECRET
+# Optional, sonst wird automatisch http(s)://HOST/api/auth/discord/callback verwendet
+DISCORD_REDIRECT_URI=https://DEINE-DOMAIN/api/auth/discord/callback
+```
+
+5) Server starten
+- Dependencies installieren: npm install
+- Backend starten: npm run start
+- Optional: Vite-Dev-Server fürs Frontend: npm run dev (Backend läuft parallel auf PORT)
+
+6) Login testen
+- Rufe /login oder /register im Browser auf und klicke "Mit Discord anmelden".
+- Nach erfolgreicher Anmeldung wirst du auf /edit weitergeleitet.
+
+7) Links zuweisen und verwalten
+- Wenn du eingeloggt bist, werden neu erstellte Kurzlinks automatisch deinem Account zugeordnet.
+- Unter /edit kannst du deine eigenen Links bearbeiten (Ziel-URL ändern, Custom-ID umbenennen) oder löschen.
+- Wichtig: Links, die vor der Registrierung erstellt wurden, können nicht nachträglich deinem Konto zugeordnet oder editiert werden.
+
+Troubleshooting
+- Invalid redirect URI: Stelle sicher, dass die Redirect-URL exakt in den Discord OAuth2 Redirects hinterlegt ist (inkl. Schema http/https, Port, Pfad /api/auth/discord/callback).
+- Cookies/Sessions: In Produktion ist das Cookie "Secure"; stelle sicher, dass du HTTPS verwendest. Bei Proxies X-Forwarded-Proto korrekt setzen.
+- CORS: Das Backend erlaubt Credentials (Cookies). Wenn du ein separates Frontend-Hosting verwendest, konfiguriere die CORS-Origin entsprechend.
+- Zeitabweichungen: Achte auf korrekte Serverzeit; große Abweichungen können beim OAuth-Flow Probleme verursachen.
