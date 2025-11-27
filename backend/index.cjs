@@ -37,6 +37,7 @@ console.log("DB-CONFIG", {
 
 
 const LEGACY_DB_FILE = path.join(__dirname, "links.json");
+const SHOWCASE_DB_FILE = path.join(__dirname, "showcase.json");
 
 async function ensureSchema() {
     const createSql = `
@@ -111,6 +112,27 @@ app.use("/uploads", express.static(UPLOADS_DIR));
 // Backward-compat: old entries stored logoUrl starting with /backend/uploads
 app.use("/backend/uploads", express.static(UPLOADS_DIR));
 app.use(express.static(PUBLIC_DIR));
+
+// Proxy for Discord guild icons to satisfy strict CSP (img-src 'self' data:)
+app.get('/proxy/discord/icons/:guildId/:icon', async (req, res) => {
+    try {
+        const { guildId, icon } = req.params;
+        const size = Math.min(256, Math.max(16, parseInt(req.query.size) || 128));
+        const isAnimated = String(icon || '').startsWith('a_');
+        const ext = isAnimated ? 'gif' : 'png';
+        const target = `https://cdn.discordapp.com/icons/${encodeURIComponent(guildId)}/${encodeURIComponent(icon)}.${ext}?size=${size}`;
+        const upstream = await axios.get(target, { responseType: 'stream' });
+        res.setHeader('Content-Type', isAnimated ? 'image/gif' : 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+        upstream.data.pipe(res);
+    } catch (e) {
+        // Fallback: lightweight SVG placeholder to avoid broken image
+        const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128'><rect width='100%' height='100%' fill='%235b21b6'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='42' fill='white'>DC</text></svg>";
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        res.status(200).send(svg);
+    }
+});
 
 // Basic rate limit for all API routes
 const apiLimiter = rateLimit({
@@ -242,10 +264,12 @@ app.get("/api/info/:id", async (req, res) => {
 
         const guild = data.guild || {};
         const serverName = guild.name || "Unbekannter Server";
-        let serverIcon = "https://cdn-icons-png.flaticon.com/512/5968/5968756.png"; // fallback
+        // Same‑origin proxy (CSP friendly). Fallback is an inline data URL (allowed by img-src 'self' data:)
+        const base = getBaseUrl(req);
+        let serverIcon = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128'><rect width='100%' height='100%' fill='%235b21b6'/><text x='50%' y='55%' dominant-baseline='middle' text-anchor='middle' font-family='Arial' font-size='42' fill='white'>DC</text></svg>";
         if (guild.icon && guild.id) {
-            const ext = String(guild.icon).startsWith("a_") ? "gif" : "png";
-            serverIcon = `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.${ext}?size=128`;
+            const size = 128;
+            serverIcon = `${base}/proxy/discord/icons/${guild.id}/${guild.icon}?size=${size}`;
         }
 
         res.json({
