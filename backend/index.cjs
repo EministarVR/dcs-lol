@@ -158,12 +158,20 @@ function verifySession(token) {
 
 function setCookie(res, name, value, options = {}) {
     const parts = [`${name}=${encodeURIComponent(value)}`];
-    if (options.maxAge) parts.push(`Max-Age=${Math.floor(options.maxAge)}`);
+    if (options.maxAge != null) parts.push(`Max-Age=${Math.floor(options.maxAge)}`);
     if (options.httpOnly !== false) parts.push('HttpOnly');
     if (options.sameSite) parts.push(`SameSite=${options.sameSite}`); else parts.push('SameSite=Lax');
     if (options.secure || process.env.NODE_ENV === 'production') parts.push('Secure');
     parts.push('Path=/');
-    res.setHeader('Set-Cookie', parts.join('; '));
+    const cookieStr = parts.join('; ');
+    const prev = res.getHeader('Set-Cookie');
+    if (!prev) {
+        res.setHeader('Set-Cookie', cookieStr);
+    } else if (Array.isArray(prev)) {
+        res.setHeader('Set-Cookie', [...prev, cookieStr]);
+    } else {
+        res.setHeader('Set-Cookie', [prev, cookieStr]);
+    }
 }
 
 // attach auth to req

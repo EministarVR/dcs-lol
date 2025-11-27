@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Trash2, Pencil, Save, Loader2, AlertCircle } from 'lucide-react';
 import { Link as RLink, useNavigate } from 'react-router-dom';
@@ -12,7 +12,7 @@ interface LinkItem {
 }
 
 const Edit: React.FC = () => {
-  const { user, loading, login, logout } = useAuth();
+  const { user, loading, login, logout, refresh } = useAuth();
   const navigate = useNavigate();
   const [items, setItems] = useState<LinkItem[]>([]);
   const [busy, setBusy] = useState(false);
@@ -23,7 +23,7 @@ const Edit: React.FC = () => {
 
   const fetchMine = async () => {
     try {
-      const res = await fetch('/api/my/links', { credentials: 'include' });
+      const res = await fetch('/api/my/links', { credentials: 'include', cache: 'no-store' });
       if (!res.ok) throw new Error('Nicht eingeloggt');
       const data = await res.json();
       setItems(data.items || []);
@@ -32,6 +32,15 @@ const Edit: React.FC = () => {
       setError(e?.message || 'Fehler beim Laden');
     }
   };
+
+  const triedRefresh = useRef(false);
+  useEffect(() => {
+    if (!loading && !user && !triedRefresh.current) {
+      triedRefresh.current = true;
+      // Edge case: after OAuth redirect, ensure we refetch /api/me once
+      refresh().catch(() => {});
+    }
+  }, [loading, user, refresh]);
 
   useEffect(() => { if (!loading && !user) { /* show info */ } }, [loading, user]);
   useEffect(() => { if (user) fetchMine(); }, [user]);
@@ -87,7 +96,7 @@ const Edit: React.FC = () => {
     );
   }
 
-  if (!user) {
+  if (!user || !user.id) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900 text-white flex items-center justify-center px-6">
         <div className="max-w-lg w-full bg-gray-800/70 border border-gray-700/60 rounded-2xl p-8 text-center">
